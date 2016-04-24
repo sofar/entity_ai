@@ -60,14 +60,18 @@ local factors = {}
 
 
 local function animation_select(self, phase, segment)
-	print("animation: " .. self.name .. ", anim = " .. phase .. ", " .. (segment or 0))
 	local state = self.entity_ai_state
 	state.phase = phase
-	state.factors.anim_ends = nil
 	local animname = self.script[state.driver].animations[phase]
+	print("animation: " .. self.name .. ", phase = " .. phase .. ", anim = " .. animname .. ", " .. (segment or 0))
 	if not segment then
+		local animations = self.script.animations[animname]
+		if not animations then
+			print(self.name .. ": no animations for " .. phase .. "-" .. segment .. "(" .. animname ..")")
+			return
+		end
 		for i = 1, 3 do
-			local animdef = self.script.animations[animname][i]
+			local animdef = animations[i]
 			if animdef then
 				state.segment = i
 				-- calculate when to advance to next segment
@@ -99,7 +103,8 @@ local function animation_loop(self, dtime)
 		state.animttl = state.animttl - dtime
 		if state.animttl <= 0 then
 			state.animttl = nil
-			state.factors.anim_ends = true
+			state.factors.anim_end = true
+			print("trigger anim_end")
 			animation_select(self, state.phase, state.segment + 1)
 		end
 	end
@@ -124,8 +129,8 @@ drivers.roam = {
 		animation_select(self, "move")
 	end,
 	step = function(self, dtime)
-		consider_factors(self)
 		animation_loop(self, dtime)
+		consider_factors(self)
 	end,
 	stop = function(self)
 		-- play out remaining animations
@@ -135,11 +140,37 @@ drivers.roam = {
 drivers.startle = {
 	start = function(self)
 		-- start with moving animation
-		animation_select(self, "startle")
+		animation_select(self, "idle")
+		-- clear factors
+		local state = self.entity_ai_state
+		state.factors.got_hit = nil
+		state.factors.anim_end = nil
 	end,
 	step = function(self, dtime)
-		consider_factors(self)
 		animation_loop(self, dtime)
+		consider_factors(self)
+	end,
+	stop = function(self)
+		-- play out remaining animations
+	end,
+}
+
+drivers.flee = {
+	start = function(self)
+		animation_select(self, "move")
+		local state = self.entity_ai_state
+		state.flee_start = minetest.get_us_time()
+		state.factors.fleed_too_long = nil
+	end,
+	step = function(self, dtime)
+		animation_loop(self, dtime)
+		-- check timer ourselves
+		local state = self.entity_ai_state
+		if (minetest.get_us_time() - state.flee_start) > (15 * 1000000) then
+			state.factors.git_hit = nil
+			state.factors.fleed_too_long = true
+		end
+		consider_factors(self)
 	end,
 	stop = function(self)
 		-- play out remaining animations
@@ -153,7 +184,12 @@ end
 
 factors.anim_end = function(self)
 	local state = self.entity_ai_state
-	return state.factors.anim_ends
+	return state.factors.anim_end
+end
+
+factors.fleed_too_long = function(self)
+	local state = self.entity_ai_state
+	return state.factors.fleed_too_long
 end
 
 local function entity_ai_on_activate(self, staticdata)
@@ -184,7 +220,7 @@ end
 
 local function entity_ai_on_step(self, dtime)
 	local state = self.entity_ai_state
-	local driver = self.script.driver
+	local driver = state.driver
 	drivers[driver].step(self, dtime)
 end
 
@@ -214,7 +250,7 @@ local sheep_script = {
 	--FIXME handle repeats (running animation 5x ?)
 	animations = {
 		move = {
-			{{x = 100, y = 110}, frame_speed = 30, frame_loop = false},
+			nil,
 			{{x = 0, y = 40}, frame_speed = 60, frame_loop = true},
 			nil
 		},
