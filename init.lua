@@ -168,37 +168,43 @@ drivers.roam = {
 					return
 				end
 				if state.roam_path then
-					local i, v = next(state.roam_path, nil)
-					if not i then
-						-- pathing failed
-						print("failed pathing!")
-						state.roam_path = nil
-						return
+					local curspd = self.object:getvelocity()
+					-- if jumping, let jump finish before making more adjustments
+					if curspd.y <= 0 then
+						local i, v = next(state.roam_path, nil)
+						if not i then
+							-- pathing failed
+							state.roam_path = nil
+							state.roam_idle = true
+							state.roam_move = nil
+							self.object:setvelocity(vector.new())
+							return
+						end
+						if vector.distance(pos, v) < 0.3 then
+							state.roam_path[i] = nil
+							--FIXME shouldn't return here
+							return
+						end
+						local vo = {x = v.x, y = v.y - 0.5, z = v.z}
+						local vec = vector.subtract(vo, pos)
+						local len = vector.length(vec)
+						local vdif = vec.y
+						vec.y = 0
+						local dir = vector.normalize(vec)
+						local spd = vector.multiply(dir, 2.0)-- vel
+						-- don't jump from too far away
+						if vdif > 0 and len < 1.5 then
+							print("jump")
+							-- jump
+							spd = {x = spd.x/10, y = 4, z = spd.z/10}
+						else
+							spd.y = self.object:getvelocity().y
+							-- don't change yaw when jumping
+							self.object:setyaw(dir_to_yaw(spd))
+						end
+						--print(minetest.pos_to_string(spd))
+						self.object:setvelocity(spd)
 					end
-					if vector.distance(pos, v) < 0.6 then
-						print("removed one!")
-						state.roam_path[i] = nil
-						-- shouldn't return here
-						return
-					end
-					local vo = {x = v.x, y = v.y - 0.5, z = v.z}
-					print("next: " .. minetest.pos_to_string(vo))
-					local vec = vector.subtract(vo, pos)
-					local len = vector.length(vec)
-					local vdif = vec.y
-					vec.y = 0
-					local dir = vector.normalize(vec)
-					local spd = vector.multiply(dir, 2.0)-- vel
-					if vdif > 0 and len < 2.0 then
-						print("jump")
-						-- jump
-						spd = {x = 0, y = 0.5, z = 0}
-					else
-						spd.y = self.object:getvelocity().y
-					end
-					--print(minetest.pos_to_string(spd))
-					self.object:setyaw(dir_to_yaw(spd))
-					self.object:setvelocity(spd)
 				end
 
 			else
@@ -223,7 +229,7 @@ drivers.roam = {
 					})
 				minp, maxp = vector.sort(minp, maxp)
 				local nodes = minetest.find_nodes_in_area_under_air(minp, maxp,
-					{"group:dirt", "group:soil", "group:crumbly", "default:dirt_with_dry_grass", "default:sand"})
+					{"group:flora", "group:snappy", "group:dirt", "group:soil", "group:crumbly", "default:dirt_with_dry_grass", "default:sand"})
 				if #nodes == 0 then
 					-- failed to get a target, just stand still
 					print("No target found, stopped")
@@ -231,16 +237,37 @@ drivers.roam = {
 				end
 
 				local pick = nodes[math.random(1, #nodes)]
+				-- find top walkable node
+				while true do
+					local node = minetest.get_node(pick)
+					if not minetest.registered_nodes[node.name].walkable then
+						pick.y = pick.y - 1
+					else
+						-- one up at the end
+						pick.y = pick.y + 1
+						break
+					end
+				end
 				-- move to the top surface of pick
-				pick.y = pick.y + 0.5
 				if not pick then
 					print("no path found!")
 					return
 				end
 				print("going to: " .. dump(pick))
+						minetest.add_particle({
+							pos = {x = pick.x, y = pick.y - 0.1, z = pick.z},
+							velocity = vector.new(),
+							acceleration = vector.new(),
+							expirationtime = 3,
+							size = 6,
+							collisiondetection = false,
+							vertical = false,
+							texture = "wool_red.png",
+							playername = nil
+						})
 				state.roam_target = pick
 
-				state.roam_path = minetest.find_path(pos, pick, 30, 2.2, 2.0, "Dijkstra")
+				state.roam_path = minetest.find_path(pos, pick, 30, 2.2, 2.0, "A*")
 				if not state.roam_path then
 					print("Unable to calculate path")
 				else
