@@ -54,6 +54,23 @@ obj:factor_is_near_mate = ...
 
 --]]
 
+function vector.sort(v1, v2)
+	return {x = math.min(v1.x, v2.x), y = math.min(v1.y, v2.y), z = math.min(v1.z, v2.z)},
+		{x = math.max(v1.x, v2.x), y = math.max(v1.y, v2.y), z = math.max(v1.z, v2.z)}
+end
+
+local function dir_to_yaw(vec)
+	if vec.z < 0 then
+		return math.pi - math.atan(vec.x / vec.z)
+	elseif vec.z > 0 then
+		return -math.atan(vec.x / vec.z)
+	elseif vec.x < 0 then
+		return math.pi
+	else
+		return 0
+	end
+end
+
 
 local drivers = {}
 local factors = {}
@@ -126,11 +143,140 @@ end
 drivers.roam = {
 	start = function(self)
 		-- start with moving animation
-		animation_select(self, "move")
+		animation_select(self, "idle")
+		local state = self.entity_ai_state
+		state.roam_idle = true
+		state.roam_ttl = math.random(3, 9)
 	end,
 	step = function(self, dtime)
 		animation_loop(self, dtime)
 		consider_factors(self)
+		-- handle movement stuff
+		local state = self.entity_ai_state
+		if state.roam_ttl and state.roam_ttl > 0 then
+			state.roam_ttl = state.roam_ttl - dtime
+			if state.roam_idle then
+				-- we should already be stopped
+				return
+			elseif state.roam_move then
+				-- do path movement
+				local pos = self.object:getpos()
+				if vector.distance(pos, state.roam_target) < 1.0 then
+					-- arrived (close enough!
+					print("arrived")
+					state.roam_ttl = 0
+					return
+				end
+				if state.roam_path then
+					local i, v = next(state.roam_path, nil)
+					if not i then
+						-- pathing failed
+						print("failed pathing!")
+						state.roam_path = nil
+						return
+					end
+					if vector.distance(pos, v) < 0.6 then
+						print("removed one!")
+						state.roam_path[i] = nil
+						-- shouldn't return here
+						return
+					end
+					local vo = {x = v.x, y = v.y - 0.5, z = v.z}
+					print("next: " .. minetest.pos_to_string(vo))
+					local vec = vector.subtract(vo, pos)
+					local len = vector.length(vec)
+					local vdif = vec.y
+					vec.y = 0
+					local dir = vector.normalize(vec)
+					local spd = vector.multiply(dir, 2.0)-- vel
+					if vdif > 0 and len < 2.0 then
+						print("jump")
+						-- jump
+						spd = {x = 0, y = 0.5, z = 0}
+					else
+						spd.y = self.object:getvelocity().y
+					end
+					--print(minetest.pos_to_string(spd))
+					self.object:setyaw(dir_to_yaw(spd))
+					self.object:setvelocity(spd)
+				end
+
+			else
+				print("unknown roam state!")
+			end
+		else
+			-- reset ttl
+			state.roam_ttl = math.random(3, 9)
+			-- flip state
+			if state.roam_idle then
+				print("going roaming")
+				-- get a target
+				local pos = self.object:getpos()
+				local minp, maxp = vector.sort({
+					x = math.random(pos.x - 10, pos.x + 10),
+					y = pos.y - 5,
+					z = math.random(pos.z - 10, pos.z + 10)
+					}, {
+					x = math.random(pos.x - 10, pos.x + 10),
+					y = pos.y + 5,
+					z = math.random(pos.z - 10, pos.z + 10)
+					})
+				minp, maxp = vector.sort(minp, maxp)
+				local nodes = minetest.find_nodes_in_area_under_air(minp, maxp,
+					{"group:dirt", "group:soil", "group:crumbly", "default:dirt_with_dry_grass", "default:sand"})
+				if #nodes == 0 then
+					-- failed to get a target, just stand still
+					print("No target found, stopped")
+					return
+				end
+
+				local pick = nodes[math.random(1, #nodes)]
+				-- move to the top surface of pick
+				pick.y = pick.y + 0.5
+				if not pick then
+					print("no path found!")
+					return
+				end
+				print("going to: " .. dump(pick))
+				state.roam_target = pick
+
+				state.roam_path = minetest.find_path(pos, pick, 30, 2.2, 2.0, "Dijkstra")
+				if not state.roam_path then
+					print("Unable to calculate path")
+				else
+					for k, v in pairs(state.roam_path) do
+						minetest.add_particle({
+							pos = v,
+							velocity = vector.new(),
+							acceleration = vector.new(),
+							expirationtime = 3,
+							size = 3,
+							collisiondetection = false,
+							vertical = false,
+							texture = "wool_white.png",
+							playername = nil
+						})
+					end
+				end
+
+				-- done, roaming mode good!
+				animation_select(self, "move")
+				state.roam_idle = nil
+				state.roam_move = true
+
+			else
+				print("going idle")
+				animation_select(self, "idle")
+				state.roam_idle = true
+				state.roam_move = nil
+				state.roam_target = nil
+				state.roam_path = nil
+				-- stop
+				self.object:setvelocity(vector.new())
+			end
+		end
+		-- minetest.find_nodes_in_area_under_air(minp, maxp, nodenames)
+		-- minetest.find_path(pos1,pos2,searchdistance,max_jump,max_drop,algorithm)
 	end,
 	stop = function(self)
 		-- play out remaining animations
@@ -177,6 +323,19 @@ drivers.flee = {
 	end,
 }
 
+drivers.death = {
+	start = function(self)
+		-- start with moving animation
+		animation_select(self, "idle")
+	end,
+	step = function(self, dtime)
+		animation_loop(self, dtime)
+	end,
+	stop = function(self)
+		-- play out remaining animations
+	end,
+}
+
 factors.got_hit = function(self)
 	local state = self.entity_ai_state
 	return state.factors.got_hit
@@ -215,6 +374,9 @@ local function entity_ai_on_activate(self, staticdata)
 		print("activate: " .. self.name .. ", driver=" .. driver)
 	end
 
+	-- gravity
+	self.object:setacceleration({x = 0, y = -9.81, z = 0})
+
 	drivers[driver].start(self)
 end
 
@@ -227,6 +389,13 @@ end
 local function entity_ai_on_punch(self, puncher, time_from_last_punch, tool_capabilities, dir)
 	local state = self.entity_ai_state
 	state.factors["got_hit"] = {puncher, time_from_last_punch, tool_capabilities, dir}
+	if self.object:get_hp() == 0 then
+		print("death")
+		self.object:set_hp(1)
+		state.driver = "death"
+		drivers.death.start(self)
+		return false
+	end
 end
 
 local function entity_ai_on_rightclick(self, clicker)
@@ -367,13 +536,13 @@ local sheep_script = {
 
 minetest.register_entity("entity_ai:sheep", {
 	name = "entity_ai:sheep",
-	hp_max = 100,
+	hp_max = 30,
 	physical = true,
 	visual = "mesh",
 	mesh = "sheep.b3d",
-	textures =  {"sheep_fur.png"},
+	textures = {"sheep_fur.png"},
 	-- standard stuff
-	collisionbox = {-1/2, -1/2, -1/2, 1/2, 1/2, 1/2},
+	collisionbox = {-7/16, -1/2, -7/16, 7/16, 6/16, 7/16},
 	-- entity_ai stuff
 	script = sheep_script,
 	-- standard callbacks
