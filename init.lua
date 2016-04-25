@@ -193,17 +193,24 @@ drivers.roam = {
 						local dir = vector.normalize(vec)
 						local spd = vector.multiply(dir, 2.0)-- vel
 						-- don't jump from too far away
-						if vdif > 0 and len < 1.5 then
+						if vdif > 0.1 and len < 1.5 then
 							print("jump")
+							-- make sure we finish our jump
+							state.roam_ttl = math.min(3.0, state.roam_ttl)
 							-- jump
 							spd = {x = spd.x/10, y = 4, z = spd.z/10}
+							self.object:setvelocity(spd)
+						elseif vdif < 0 and len <= 1.1 then
+							-- drop one path node just to be sure
+							state.roam_path[i] = nil
+							-- falling down, just let if fall
 						else
 							spd.y = self.object:getvelocity().y
 							-- don't change yaw when jumping
 							self.object:setyaw(dir_to_yaw(spd))
+							self.object:setvelocity(spd)
 						end
 						--print(minetest.pos_to_string(spd))
-						self.object:setvelocity(spd)
 					end
 				end
 
