@@ -170,7 +170,7 @@ drivers.roam = {
 				if state.roam_path then
 					local curspd = self.object:getvelocity()
 					-- if jumping, let jump finish before making more adjustments
-					if curspd.y <= 0 then
+					if curspd.y <= 0.2 and curspd.y >= 0 then
 						local i, v = next(state.roam_path, nil)
 						if not i then
 							-- pathing failed
@@ -181,10 +181,30 @@ drivers.roam = {
 							return
 						end
 						if vector.distance(pos, v) < 0.3 then
+							-- remove one
 							state.roam_path[i] = nil
 							--FIXME shouldn't return here
 							return
 						end
+						-- prune path more?
+						local ii, vv = next(state.roam_path, i)
+						local iii, vvv = next(state.roam_path, ii)
+						if vv and vvv and vvv.y == v.y and vector.distance(vv,v) < 2 then
+							-- prune one
+							state.roam_path[ii] = nil
+						end
+						-- done pruning
+						minetest.add_particle({
+							pos = {x = v.x, y = v.y + 0.2, z = v.z},
+							velocity = vector.new(),
+							acceleration = vector.new(),
+							expirationtime = 1,
+							size = 2,
+							collisiondetection = false,
+							vertical = false,
+							texture = "wool_yellow.png",
+							playername = nil
+						})
 						local vo = {x = v.x, y = v.y - 0.5, z = v.z}
 						local vec = vector.subtract(vo, pos)
 						local len = vector.length(vec)
@@ -198,7 +218,7 @@ drivers.roam = {
 							-- make sure we finish our jump
 							state.roam_ttl = math.min(3.0, state.roam_ttl)
 							-- jump
-							spd = {x = spd.x/10, y = 4, z = spd.z/10}
+							spd = {x = spd.x/10, y = 5, z = spd.z/10}
 							self.object:setvelocity(spd)
 						elseif vdif < 0 and len <= 1.1 then
 							-- drop one path node just to be sure
@@ -273,8 +293,15 @@ drivers.roam = {
 							playername = nil
 						})
 				state.roam_target = pick
+				-- pathing will fail if we're on a ledge. We can fix this by
+				-- pathing from the node below instead
+				local onpos = vector.round({x = pos.x, y = pos.y - 1, z = pos.z})
+				local on = minetest.get_node(onpos)
+				if not minetest.registered_nodes[on.name].walkable then
+					pos.y = onpos.y - 0.5
+				end
 
-				state.roam_path = minetest.find_path(pos, pick, 30, 2.2, 2.0, "A*")
+				state.roam_path = minetest.find_path(pos, pick, 30, 1.0, .0, "Dijkstra")
 				if not state.roam_path then
 					print("Unable to calculate path")
 				else
