@@ -163,7 +163,6 @@ drivers.roam = {
 				local pos = self.object:getpos()
 				if vector.distance(pos, state.roam_target) < 1.0 then
 					-- arrived (close enough!
-					print("arrived")
 					state.roam_ttl = 0
 					return
 				end
@@ -174,17 +173,19 @@ drivers.roam = {
 						local i, v = next(state.roam_path, nil)
 						if not i then
 							-- pathing failed
-							state.roam_path = nil
-							state.roam_idle = true
-							state.roam_move = nil
-							self.object:setvelocity(vector.new())
+							state.roam_ttl = 0
 							return
 						end
 						if vector.distance(pos, v) < 0.3 then
 							-- remove one
-							state.roam_path[i] = nil
 							--FIXME shouldn't return here
-							return
+							local j = i
+							local i, v = next(state.roam_path, i)
+							if not v then
+								state.roam_path[j] = nil
+								state.roam_ttl = 0
+								return
+							end
 						end
 						-- prune path more?
 						local ii, vv = next(state.roam_path, i)
@@ -280,7 +281,6 @@ drivers.roam = {
 					print("no path found!")
 					return
 				end
-				print("going to: " .. dump(pick))
 						minetest.add_particle({
 							pos = {x = pick.x, y = pick.y - 0.1, z = pick.z},
 							velocity = vector.new(),
@@ -491,7 +491,7 @@ local sheep_script = {
 		},
 		idle = {
 			nil,
-			{{x = 111, y = 119}, frame_speed = 10, frame_loop = true},
+			{{x = 111, y = 129}, frame_speed = 10, frame_loop = true},
 			nil
 		},
 		eat = {
