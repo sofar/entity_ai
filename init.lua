@@ -254,8 +254,6 @@ drivers.roam = {
 				self.object:setvelocity(vector.new())
 			end
 		end
-		-- minetest.find_nodes_in_area_under_air(minp, maxp, nodenames)
-		-- minetest.find_path(pos1,pos2,searchdistance,max_jump,max_drop,algorithm)
 	end,
 	stop = function(self)
 		-- play out remaining animations
@@ -267,9 +265,11 @@ drivers.startle = {
 		-- startle animation
 		animation_select(self, "idle")
 		self.object:setvelocity(vector.new())
-		-- clear factors
+		-- collect info we want to use in this driver
 		local state = self.entity_ai_state
 		state.attacker = state.factors.got_hit[1]
+		state.attacked_at = state.factors.got_hit[5]
+		-- clear factors
 		state.factors.got_hit = nil
 		state.factors.anim_end = nil
 	end,
@@ -294,10 +294,99 @@ drivers.flee = {
 		-- check timer ourselves
 		local state = self.entity_ai_state
 		if (minetest.get_us_time() - state.flee_start) > (15 * 1000000) then
-			state.factors.git_hit = nil
+			state.factors.got_hit = nil
 			state.factors.fleed_too_long = true
 		end
 		consider_factors(self)
+
+		-- are we fleeing yet?
+		if self.path.distance then
+			-- stop fleeing if we're at a safe distance
+			-- execute flee path
+			if self.path:distance() < 2.0 then
+				-- get a new flee path
+				self.path = {}
+			else
+				-- follow path
+				if not self.path:step() then
+					self.path = {}
+				end
+			end
+		else
+			-- get new target to flee to
+			local from = self.attacked_at
+			if self.attacker and self.attacker ~= "" then
+				local player = minetest.get_player_by_name(self.attacker)
+				if player then
+					from = player:getpos()
+				end
+			end
+			if not from then
+				from = self.object:getpos()
+				self.attacked_at = from
+			end
+
+			from = vector.round(from)
+
+			local pos = self.object:getpos()
+			local dir = vector.subtract(pos, from)
+			dir = vector.normalize(dir)
+			dir = vector.multiply(dir, 10)
+			local to = vector.add(pos, dir)
+
+			local nodes = minetest.find_nodes_in_area_under_air(
+					vector.subtract(to, 4),
+					vector.add(to, 4),
+					{"group:crumbly", "group:cracky", "group:stone"})
+
+			if #nodes == 0 then
+				-- failed to get a target, just run away from attacker?!
+				print("No target found, stopped")
+				return
+			end
+
+			-- find top walkable node
+			local pick = nodes[math.random(1, #nodes)]
+			while true do
+				local node = minetest.get_node(pick)
+				if not minetest.registered_nodes[node.name].walkable then
+					pick.y = pick.y - 1
+				else
+					-- one up at the end
+					pick.y = pick.y + 1
+					break
+				end
+			end
+
+			-- move to the top surface of pick
+			if not pick then
+				print("no path found!")
+				return
+			end
+
+			minetest.add_particle({
+				pos = {x = pick.x, y = pick.y - 0.1, z = pick.z},
+				velocity = vector.new(),
+				acceleration = vector.new(),
+				expirationtime = 3,
+				size = 6,
+				collisiondetection = false,
+				vertical = false,
+				texture = "wool_red.png",
+				playername = nil
+			})
+
+			self.path = Path(self, pick)
+			if not self.path:find() then
+				print("Unable to calculate path")
+				return
+			end
+
+			-- done, roaming mode good!
+			animation_select(self, "move")
+			state.roam_idle = nil
+			state.roam_move = true
+		end
 	end,
 	stop = function(self)
 		-- play out remaining animations
@@ -378,7 +467,7 @@ end
 
 local function entity_ai_on_punch(self, puncher, time_from_last_punch, tool_capabilities, dir)
 	local state = self.entity_ai_state
-	state.factors["got_hit"] = {puncher:get_player_name(), time_from_last_punch, tool_capabilities, dir}
+	state.factors["got_hit"] = {puncher:get_player_name(), time_from_last_punch, tool_capabilities, dir, self.object:getpos()}
 	if self.object:get_hp() == 0 then
 		print("death")
 		self.object:set_hp(1)
@@ -394,7 +483,7 @@ end
 local function entity_ai_get_staticdata(self)
 	print("saved: " .. self.name)
 	local state = self.entity_ai_state
-	if self.path then
+	if self.path and self.path.save then
 		state.path_save = self.path:save()
 	end
 	return minetest.serialize(state)
