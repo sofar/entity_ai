@@ -54,27 +54,33 @@ obj:factor_is_near_mate = ...
 
 --]]
 
+--
+-- misc functions
+--
+
 function vector.sort(v1, v2)
 	return {x = math.min(v1.x, v2.x), y = math.min(v1.y, v2.y), z = math.min(v1.z, v2.z)},
 		{x = math.max(v1.x, v2.x), y = math.max(v1.y, v2.y), z = math.max(v1.z, v2.z)}
 end
 
-local function dir_to_yaw(vec)
-	if vec.z < 0 then
-		return math.pi - math.atan(vec.x / vec.z)
-	elseif vec.z > 0 then
-		return -math.atan(vec.x / vec.z)
-	elseif vec.x < 0 then
-		return math.pi
-	else
-		return 0
-	end
-end
+--
+-- includes
+--
+local modpath = minetest.get_modpath(minetest.get_current_modname())
+
+dofile(modpath .. "/path.lua")
+
+
+--
+-- globals
+--
 
 
 local drivers = {}
 local factors = {}
-
+--
+-- Animation functions
+--
 
 local function animation_select(self, phase, segment)
 	local state = self.entity_ai_state
@@ -160,81 +166,18 @@ drivers.roam = {
 				return
 			elseif state.roam_move then
 				-- do path movement
-				local pos = self.object:getpos()
-				if vector.distance(pos, state.roam_target) < 1.0 then
-					-- arrived (close enough!
+				if not self.path then
 					state.roam_ttl = 0
 					return
 				end
-				if state.roam_path then
-					local curspd = self.object:getvelocity()
-					-- if jumping, let jump finish before making more adjustments
-					if curspd.y <= 0.2 and curspd.y >= 0 then
-						local i, v = next(state.roam_path, nil)
-						if not i then
-							-- pathing failed
-							state.roam_ttl = 0
-							return
-						end
-						if vector.distance(pos, v) < 0.3 then
-							-- remove one
-							--FIXME shouldn't return here
-							local j = i
-							local i, v = next(state.roam_path, i)
-							if not v then
-								state.roam_path[j] = nil
-								state.roam_ttl = 0
-								return
-							end
-						end
-						-- prune path more?
-						local ii, vv = next(state.roam_path, i)
-						local iii, vvv = next(state.roam_path, ii)
-						if vv and vvv and vvv.y == v.y and vector.distance(vv,v) < 2 then
-							-- prune one
-							state.roam_path[ii] = nil
-						end
-						-- done pruning
-						minetest.add_particle({
-							pos = {x = v.x, y = v.y + 0.2, z = v.z},
-							velocity = vector.new(),
-							acceleration = vector.new(),
-							expirationtime = 1,
-							size = 2,
-							collisiondetection = false,
-							vertical = false,
-							texture = "wool_yellow.png",
-							playername = nil
-						})
-						local vo = {x = v.x, y = v.y - 0.5, z = v.z}
-						local vec = vector.subtract(vo, pos)
-						local len = vector.length(vec)
-						local vdif = vec.y
-						vec.y = 0
-						local dir = vector.normalize(vec)
-						local spd = vector.multiply(dir, 2.0)-- vel
-						-- don't jump from too far away
-						if vdif > 0.1 and len < 1.5 then
-							print("jump")
-							-- make sure we finish our jump
-							state.roam_ttl = math.min(3.0, state.roam_ttl)
-							-- jump
-							spd = {x = spd.x/10, y = 5, z = spd.z/10}
-							self.object:setvelocity(spd)
-						elseif vdif < 0 and len <= 1.1 then
-							-- drop one path node just to be sure
-							state.roam_path[i] = nil
-							-- falling down, just let if fall
-						else
-							spd.y = self.object:getvelocity().y
-							-- don't change yaw when jumping
-							self.object:setyaw(dir_to_yaw(spd))
-							self.object:setvelocity(spd)
-						end
-						--print(minetest.pos_to_string(spd))
-					end
+				if self.path:distance() < 1.0 then
+					state.roam_ttl = 0
+					return
 				end
-
+				if not self.path:step(dtime) then
+					-- pathing failed
+					state.roam_ttl = 0
+				end
 			else
 				print("unknown roam state!")
 			end
@@ -243,7 +186,6 @@ drivers.roam = {
 			state.roam_ttl = math.random(3, 9)
 			-- flip state
 			if state.roam_idle then
-				print("going roaming")
 				-- get a target
 				local pos = self.object:getpos()
 				local minp, maxp = vector.sort({
@@ -281,57 +223,33 @@ drivers.roam = {
 					print("no path found!")
 					return
 				end
-						minetest.add_particle({
-							pos = {x = pick.x, y = pick.y - 0.1, z = pick.z},
-							velocity = vector.new(),
-							acceleration = vector.new(),
-							expirationtime = 3,
-							size = 6,
-							collisiondetection = false,
-							vertical = false,
-							texture = "wool_red.png",
-							playername = nil
-						})
-				state.roam_target = pick
-				-- pathing will fail if we're on a ledge. We can fix this by
-				-- pathing from the node below instead
-				local onpos = vector.round({x = pos.x, y = pos.y - 1, z = pos.z})
-				local on = minetest.get_node(onpos)
-				if not minetest.registered_nodes[on.name].walkable then
-					pos.y = onpos.y - 0.5
-				end
 
-				state.roam_path = minetest.find_path(pos, pick, 30, 1.0, .0, "Dijkstra")
-				if not state.roam_path then
+				minetest.add_particle({
+					pos = {x = pick.x, y = pick.y - 0.1, z = pick.z},
+					velocity = vector.new(),
+					acceleration = vector.new(),
+					expirationtime = 3,
+					size = 6,
+					collisiondetection = false,
+					vertical = false,
+					texture = "wool_red.png",
+					playername = nil
+				})
+
+				self.path = Path(self, pick)
+				if not self.path:find() then
 					print("Unable to calculate path")
-				else
-					for k, v in pairs(state.roam_path) do
-						minetest.add_particle({
-							pos = v,
-							velocity = vector.new(),
-							acceleration = vector.new(),
-							expirationtime = 3,
-							size = 3,
-							collisiondetection = false,
-							vertical = false,
-							texture = "wool_white.png",
-							playername = nil
-						})
-					end
+					return
 				end
 
 				-- done, roaming mode good!
 				animation_select(self, "move")
 				state.roam_idle = nil
 				state.roam_move = true
-
 			else
-				print("going idle")
 				animation_select(self, "idle")
 				state.roam_idle = true
 				state.roam_move = nil
-				state.roam_target = nil
-				state.roam_path = nil
 				-- stop
 				self.object:setvelocity(vector.new())
 			end
@@ -346,10 +264,12 @@ drivers.roam = {
 
 drivers.startle = {
 	start = function(self)
-		-- start with moving animation
+		-- startle animation
 		animation_select(self, "idle")
+		self.object:setvelocity(vector.new())
 		-- clear factors
 		local state = self.entity_ai_state
+		state.attacker = state.factors.got_hit[1]
 		state.factors.got_hit = nil
 		state.factors.anim_end = nil
 	end,
@@ -425,6 +345,15 @@ local function entity_ai_on_activate(self, staticdata)
 			self.object:remove()
 			return
 		end
+		-- path class
+		local state = self.entity_ai_state
+		if state.path_save then
+			self.path = Path(self, state.path_save.target)
+			self.path:set_config(state.path_save.config)
+			self.path:find()
+			state.path_save = {}
+		end
+
 		driver = self.entity_ai_state.driver
 		print("loaded: " .. self.name .. ", driver=" .. driver)
 	else
@@ -449,7 +378,7 @@ end
 
 local function entity_ai_on_punch(self, puncher, time_from_last_punch, tool_capabilities, dir)
 	local state = self.entity_ai_state
-	state.factors["got_hit"] = {puncher, time_from_last_punch, tool_capabilities, dir}
+	state.factors["got_hit"] = {puncher:get_player_name(), time_from_last_punch, tool_capabilities, dir}
 	if self.object:get_hp() == 0 then
 		print("death")
 		self.object:set_hp(1)
@@ -464,7 +393,11 @@ end
 
 local function entity_ai_get_staticdata(self)
 	print("saved: " .. self.name)
-	return minetest.serialize(self.entity_ai_state)
+	local state = self.entity_ai_state
+	if self.path then
+		state.path_save = self.path:save()
+	end
+	return minetest.serialize(state)
 end
 
 
