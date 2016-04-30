@@ -86,6 +86,10 @@ local function animation_select(self, phase, segment)
 	local state = self.entity_ai_state
 	state.phase = phase
 	local animname = self.script[state.driver].animations[phase]
+	if not animname then
+		print(self.name .. ": no animations for " .. phase .. "-" .. segment .. "(" .. animname ..")")
+		return
+	end
 	print("animation: " .. self.name .. ", phase = " .. phase .. ", anim = " .. animname .. ", " .. (segment or 0))
 	if not segment then
 		local animations = self.script.animations[animname]
@@ -133,10 +137,14 @@ local function animation_loop(self, dtime)
 	end
 end
 
-local function consider_factors(self)
+local function consider_factors(self, dtime)
 	local state = self.entity_ai_state
 
 	for factor, factordriver in pairs(self.script[state.driver].factors) do
+		-- do we have a test we need to run?
+		if factors[factor] then
+			factors[factor](self, dtime)
+		end
 		if state.factors[factor] then
 			print("factor " .. factor .. " affects " ..  self.name .. " driver changed to " .. factordriver)
 			state.driver = factordriver
@@ -156,7 +164,7 @@ drivers.roam = {
 	end,
 	step = function(self, dtime)
 		animation_loop(self, dtime)
-		consider_factors(self)
+		consider_factors(self, dtime)
 		-- handle movement stuff
 		local state = self.entity_ai_state
 		if state.roam_ttl and state.roam_ttl > 0 then
@@ -275,10 +283,49 @@ drivers.startle = {
 	end,
 	step = function(self, dtime)
 		animation_loop(self, dtime)
-		consider_factors(self)
+		consider_factors(self, dtime)
 	end,
 	stop = function(self)
 		-- play out remaining animations
+	end,
+}
+
+drivers.eat = {
+	start = function(self)
+		-- startle animation
+		animation_select(self, "eat")
+		self.object:setvelocity(vector.new())
+		-- collect info we want to use in this driver
+		local state = self.entity_ai_state
+		-- clear factors
+		state.factors.near_grass = nil
+		state.eat_ttl = math.random(30, 60)
+	end,
+	step = function(self, dtime)
+		animation_loop(self, dtime)
+		consider_factors(self, dtime)
+
+		local state = self.entity_ai_state
+		state.eat_ttl = (state.eat_ttl or math.random(30, 30)) - dtime
+		if state.eat_ttl > 0 then
+			return
+		end
+		if math.random() > 0.25 then
+			state.factors.ate_enough = math.random(200, 00)
+			return
+		else
+			if state.eat_idle then
+				animation_select(self, "eat")
+				state.eat_ttl = math.random(30, 60)
+				state.eat_idle = nil
+			else
+				animation_select(self, "idle")
+				state.eat_ttl = math.random(10, 20)
+				state.eat_idle = true
+			end
+		end
+	end,
+	stop = function(self)
 	end,
 }
 
@@ -297,7 +344,7 @@ drivers.flee = {
 			state.factors.got_hit = nil
 			state.factors.fleed_too_long = true
 		end
-		consider_factors(self)
+		consider_factors(self, dtime)
 
 		-- are we fleeing yet?
 		if self.path.distance then
@@ -406,19 +453,46 @@ drivers.death = {
 	end,
 }
 
-factors.got_hit = function(self)
+factors.near_grass = function(self, dtime)
 	local state = self.entity_ai_state
-	return state.factors.got_hit
-end
+	if state.factors.ate_enough and state.factors.ate_enough > 0 then
+		state.factors.ate_enough = state.factors.ate_enough - dtime
+		return
+	else
+		state.factors.ate_enough = nil
+	end
+	if self.near_grass_ttl and self.near_grass_ttl > 0 then
+		self.near_grass_ttl = self.near_grass_ttl - dtime
+		return
+	end
+	-- don't check too often
+	self.near_grass_ttl = 2.0
+	local pos = vector.round(self.object:getpos())
+	local yaw = self.object:getyaw()
+	local minp = vector.subtract(pos, 1)
+	local maxp = vector.add(pos, 1)
+	local nodes = minetest.find_nodes_in_area(minp, maxp, {
+		"group:grass",
+		"default:grass_1",
+		"default:grass_2",
+		"default:grass_3",
+		"default:grass_4",
+		"default:grass_5",
+		"default:dry_grass_1",
+		"default:dry_grass_2",
+		"default:dry_grass_3",
+		"default:dry_grass_4",
+		"default:dry_grass_5",
+	})
 
-factors.anim_end = function(self)
-	local state = self.entity_ai_state
-	return state.factors.anim_end
-end
+	if #nodes == 0 then
+		return
+	end
 
-factors.fleed_too_long = function(self)
+	-- store grass node in our factor result
 	local state = self.entity_ai_state
-	return state.factors.fleed_too_long
+	local pick, _ = next(nodes, nil)
+	state.factors.near_grass = pick
 end
 
 local function entity_ai_on_activate(self, staticdata)
@@ -517,9 +591,9 @@ local sheep_script = {
 			nil
 		},
 		eat = {
-			nil,
-			{{x = 41, y = 81}, frame_speed = 30, frame_loop = true},
-			nil,
+			{{x = 41, y = 47}, frame_speed = 15, frame_loop = false},
+			{{x = 47, y = 75}, frame_speed = 15, frame_loop = true},
+			{{x = 75, y = 81}, frame_speed = 15, frame_loop = false},
 		},
 		startle = {
 			{{x = 100, y = 110}, frame_speed = 30, frame_loop = false},
@@ -540,6 +614,7 @@ local sheep_script = {
 			became_fertile = "fertile",
 			attractor_nearby = "attracted",
 			too_far_from_home = "homing",
+			near_grass = "eat",
 		},
 		animations = {
 			move = "move",
