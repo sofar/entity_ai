@@ -1,9 +1,19 @@
 --[[
+
+General API design ideas:
+	-- spawning a new entity
+	obj = Entity({name = "sheep", state = {}})
+
+	-- drivers
+	self.driver:switch(self, driver)
+	self.driver:step()
+	self.driver:start()
+	self.driver:stop()
+
 - entity programming should use object:method() design.
 - creating an entity should use simple methods as follows:
 
 minetest.register_entity("sofar:sheep", {
-	object = {},
 	...,
 	on_activate = entity_ai:on_activate,
 	on_step = entity_ai:on_step,
@@ -63,21 +73,23 @@ function vector.sort(v1, v2)
 		{x = math.max(v1.x, v2.x), y = math.max(v1.y, v2.y), z = math.max(v1.z, v2.z)}
 end
 
+
+--
+-- globals
+--
+drivers = {}
+local factors = {}
+
+
 --
 -- includes
 --
 local modpath = minetest.get_modpath(minetest.get_current_modname())
 
 dofile(modpath .. "/path.lua")
+dofile(modpath .. "/driver.lua")
 
 
---
--- globals
---
-
-
-local drivers = {}
-local factors = {}
 --
 -- Animation functions
 --
@@ -85,7 +97,7 @@ local factors = {}
 local function animation_select(self, animation, segment)
 	local state = self.entity_ai_state
 	state.animation = animation
-	print("animation: " .. self.name .. ", animation = " .. animation .. ", segment = " .. (segment or 0))
+	print(self.name .. ": driver = " .. self.driver.name .. ", animation = " .. animation .. ", segment = " .. (segment or 0))
 	if not segment then
 		local animations = self.script.animations[animation]
 		if not animations then
@@ -135,15 +147,16 @@ end
 local function consider_factors(self, dtime)
 	local state = self.entity_ai_state
 
-	for factor, factordriver in pairs(self.script[state.driver].factors) do
+	for factor, factordriver in pairs(self.script[self.driver.name].factors) do
 		-- do we have a test we need to run?
 		if factors[factor] then
 			factors[factor](self, dtime)
 		end
+		-- check results
 		if state.factors[factor] then
 			print("factor " .. factor .. " affects " ..  self.name .. " driver changed to " .. factordriver)
 			state.driver = factordriver
-			drivers[factordriver].start(self)
+			self.driver:switch(factordriver)
 		end
 	end
 end
@@ -173,8 +186,7 @@ drivers.roam = {
 		if #nodes == 0 then
 			-- failed to get a target
 			print("No target found, stopped")
-			state.driver = "idle"
-			drivers.idle.start(self)
+			self.driver:switch("idle")
 			return
 		end
 
@@ -193,8 +205,7 @@ drivers.roam = {
 		-- move to the top surface of pick
 		if not pick then
 			print("no path found!")
-			state.driver = "idle"
-			drivers.idle.start(self)
+			self.driver:switch("idle")
 			return
 		end
 
@@ -213,8 +224,7 @@ drivers.roam = {
 		self.path = Path(self, pick)
 		if not self.path:find() then
 			print("Unable to calculate path")
-			state.driver = "idle"
-			drivers.idle.start(self)
+			self.driver:switch("idle")
 			return
 		end
 
@@ -232,13 +242,11 @@ drivers.roam = {
 			if not self.path or
 					self.path:distance() < 0.7 or
 					not self.path:step(dtime) then
-				state.driver = "idle"
-				drivers.idle.start(self)
+				self.driver:switch("idle")
 				return
 			end
 		else
-			state.driver = "idle"
-			drivers.idle.start(self)
+			self.driver:switch("idle")
 		end
 	end,
 	stop = function(self)
@@ -259,8 +267,7 @@ drivers.idle = {
 		local state = self.entity_ai_state
 		state.idle_ttl = state.idle_ttl - dtime
 		if state.idle_ttl <= 0 then
-			state.driver = "roam"
-			drivers.roam.start(self)
+			self.driver:switch("roam")
 		end
 	end,
 	stop = function(self)
@@ -270,12 +277,14 @@ drivers.idle = {
 drivers.startle = {
 	start = function(self)
 		-- startle animation
-		animation_select(self, "idle")
+		animation_select(self, "startle")
 		self.object:setvelocity(vector.new())
 		-- collect info we want to use in this driver
 		local state = self.entity_ai_state
-		state.attacker = state.factors.got_hit[1]
-		state.attacked_at = state.factors.got_hit[5]
+		if state.factors.got_hit then
+			state.attacker = state.factors.got_hit[1]
+			state.attacked_at = state.factors.got_hit[5]
+		end
 		-- clear factors
 		state.factors.got_hit = nil
 		state.factors.anim_end = nil
@@ -504,8 +513,10 @@ local function entity_ai_on_activate(self, staticdata)
 			self.object:remove()
 			return
 		end
-		-- path class
+
 		local state = self.entity_ai_state
+
+		-- path class
 		if state.path_save then
 			self.path = Path(self, state.path_save.target)
 			self.path:set_config(state.path_save.config)
@@ -513,36 +524,40 @@ local function entity_ai_on_activate(self, staticdata)
 			state.path_save = {}
 		end
 
-		driver = self.entity_ai_state.driver
-		print("loaded: " .. self.name .. ", driver=" .. driver)
+		-- driver class
+		if state.driver_save then
+			driver = state.driver_save
+			state.driver_save = nil
+		else
+			driver = self.script.driver
+		end
+		print("loaded: " .. self.name .. ", driver=" .. driver )
 	else
 		-- set initial mob driver
 		driver = self.script.driver
-		local state = self.entity_ai_state
-		state.driver = driver
 		print("activate: " .. self.name .. ", driver=" .. driver)
 	end
 
 	-- gravity
 	self.object:setacceleration({x = 0, y = -9.81, z = 0})
 
-	drivers[driver].start(self)
+	-- init driver
+	self.driver = Driver(self, driver)
+	self.driver:start()
 end
 
 local function entity_ai_on_step(self, dtime)
-	local state = self.entity_ai_state
-	local driver = state.driver
-	drivers[driver].step(self, dtime)
+	self.driver:step(dtime)
 end
 
 local function entity_ai_on_punch(self, puncher, time_from_last_punch, tool_capabilities, dir)
 	local state = self.entity_ai_state
 	state.factors["got_hit"] = {puncher:get_player_name(), time_from_last_punch, tool_capabilities, dir, self.object:getpos()}
 	if self.object:get_hp() == 0 then
+		--FIXME
 		print("death")
 		self.object:set_hp(1)
-		state.driver = "death"
-		drivers.death.start(self)
+		self.driver:switch("death")
 		return false
 	end
 end
@@ -553,6 +568,7 @@ end
 local function entity_ai_get_staticdata(self)
 	print("saved: " .. self.name)
 	local state = self.entity_ai_state
+	state.driver_save = self.driver.name
 	if self.path and self.path.save then
 		state.path_save = self.path:save()
 	end
@@ -602,17 +618,24 @@ local sheep_script = {
 			nil,
 		},
 	},
+	-- sound samples
+	sounds = {
+		chatter = {name = "sheep_chatter", gain = 1.0},
+		footsteps = {name = "sheep_steps", gain = 1.0},
+		hurt = {name = "sheep_hurt", gain = 1.0},
+	},
 	-- mob script states:
 	roam = {
-		driver = "roaming",
 		factors = {
 			got_hit = "startle",
 			became_fertile = "fertile",
 			attractor_nearby = "attracted",
 		},
+		sounds = {
+			random = "chatter",
+		},
 	},
 	idle = {
-		driver = "idle",
 		factors = {
 			got_hit = "startle",
 			became_fertile = "fertile",
@@ -620,50 +643,69 @@ local sheep_script = {
 			too_far_from_home = "homing",
 			near_grass = "eat",
 		},
+		sounds = {
+			random = "chatter",
+		},
 	},
 	eat = {
-		driver = "eat",
 		factors = {
+			got_hit = "startle",
 			ate_enough = "roam",
 			became_fertile = "fertile",
 			attractor_nearby = "attracted",
 		},
+		sounds = {
+			random = "chatter",
+		},
 	},
 	startle = {
-		driver = "startle",
 		factors = {
 			anim_end = "flee",
 		},
+		sounds = {
+			start = "hurt",
+		},
 	},
 	flee = {
-		driver = "flee",
 		factors = {
 			got_hit = "startle",
 			fleed_too_long = "roam",
 		},
+		sounds = {
+			random = "hurt",
+		},
 	},
 	attracted = {
-		driver = "approach",
 		factors = {
+			got_hit = "startle",
 			became_fertile = "fertile",
 			approached_too_long = "roam",
 		},
+		sounds = {
+			random = "chatter",
+		},
 	},
 	fertile = {
-		driver = "mate",
 		factors = {
 			got_hit = "startle",
 		},
+		sounds = {
+			random = "chatter",
+		},
 	},
 	homing = {
-		driver = "homing",
 		factors = {
 			near_home = "roam",
 			got_hit = "startle",
 		},
+		sounds = {
+			random = "chatter",
+		},
 	},
 	death = {
-		driver = "death",
+		sounds = {
+			start = "hurt",
+		},
 	},
 }
 
