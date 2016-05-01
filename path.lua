@@ -65,7 +65,7 @@ function Path:find()
 	local config = self.config
 	self.path = minetest.find_path(pos, vector.round(self.target), config.distance, config.jump,
 			config.fall, config.algorithm)
-
+--[[
 	if self.path ~= nil then
 		for k, v in pairs(self.path) do
 			minetest.add_particle({
@@ -81,6 +81,7 @@ function Path:find()
 			})
 		end
 	end
+--]]
 
 	return self.path ~= nil
 end
@@ -111,6 +112,7 @@ function Path:step(dtime)
 			self.path[ii] = nil
 		end
 		-- done pruning
+--[[
 		minetest.add_particle({
 			pos = {x = v.x, y = v.y + 0.2, z = v.z},
 			velocity = vector.new(),
@@ -122,6 +124,7 @@ function Path:step(dtime)
 			texture = "wool_yellow.png",
 			playername = nil
 		})
+--]]
 		local vo = {x = v.x, y = v.y - 0.5, z = v.z}
 		local vec = vector.subtract(vo, pos)
 		local len = vector.length(vec)

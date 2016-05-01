@@ -3,6 +3,7 @@
 -- Driver class - manage driver execution
 --
 
+
 -- Class definition
 Driver = {}
 Driver.__index = Driver
@@ -13,6 +14,8 @@ setmetatable(Driver, {
 	end,
 })
 
+
+-- private functions
 local function driver_setup(self, driver)
 	self.name = driver
 	self.driver = drivers[driver]
@@ -25,7 +28,20 @@ local function driver_setup(self, driver)
 	end
 end
 
--- constructor
+local function driver_start(self)
+	local script = self.object.script
+	local sounds = script[self.name].sounds
+	if sounds and sounds.start then
+		local spec = script.sounds[sounds.start][1]
+		local params = {max_hear_distance = script.sounds[sounds.start][2].max_hear_distance,
+				object = self.object.object}
+		minetest.sound_play(spec, params)
+	end
+	self.driver.start(self.object)
+end
+
+
+--- constructor
 function Driver.new(object, driver)
 	local self = setmetatable({}, Driver)
 	self.object = object
@@ -33,16 +49,26 @@ function Driver.new(object, driver)
 	return self
 end
 
+
+-- public functions
 function Driver:switch(driver)
 	driver_setup(self, driver)
-	self.driver.start(self.object)
+	driver_start(self)
 end
 
 function Driver:start()
-	self.driver.start(self.object)
+	driver_start(self)
 end
 
 function Driver:step(dtime)
+	local script = self.object.script
+	local sounds = script[self.name].sounds
+	if math.random(1, 200) == 1 and sounds and sounds.random then
+		local spec = script.sounds[sounds.random][1]
+		local params = {max_hear_distance = script.sounds[sounds.random][2].max_hear_distance,
+				object = self.object.object}
+		minetest.sound_play(spec, params)
+	end
 	self.driver.step(self.object, dtime)
 end
 

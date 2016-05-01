@@ -209,7 +209,7 @@ drivers.roam = {
 			return
 		end
 
-		minetest.add_particle({
+--[[		minetest.add_particle({
 			pos = {x = pick.x, y = pick.y - 0.1, z = pick.z},
 			velocity = vector.new(),
 			acceleration = vector.new(),
@@ -220,6 +220,7 @@ drivers.roam = {
 			texture = "wool_red.png",
 			playername = nil
 		})
+--]]
 
 		self.path = Path(self, pick)
 		if not self.path:find() then
@@ -232,8 +233,6 @@ drivers.roam = {
 		animation_select(self, "move")
 	end,
 	step = function(self, dtime)
-		animation_loop(self, dtime)
-		consider_factors(self, dtime)
 		-- handle movement stuff
 		local state = self.entity_ai_state
 		if state.roam_ttl > 0 then
@@ -262,8 +261,6 @@ drivers.idle = {
 		state.idle_ttl = math.random(2, 20)
 	end,
 	step = function(self, dtime)
-		animation_loop(self, dtime)
-		consider_factors(self, dtime)
 		local state = self.entity_ai_state
 		state.idle_ttl = state.idle_ttl - dtime
 		if state.idle_ttl <= 0 then
@@ -290,8 +287,6 @@ drivers.startle = {
 		state.factors.anim_end = nil
 	end,
 	step = function(self, dtime)
-		animation_loop(self, dtime)
-		consider_factors(self, dtime)
 	end,
 	stop = function(self)
 		-- play out remaining animations
@@ -309,8 +304,6 @@ drivers.eat = {
 		state.eat_ttl = math.random(30, 60)
 	end,
 	step = function(self, dtime)
-		animation_loop(self, dtime)
-		consider_factors(self, dtime)
 
 		local state = self.entity_ai_state
 		state.eat_ttl = (state.eat_ttl or math.random(30, 30)) - dtime
@@ -344,14 +337,12 @@ drivers.flee = {
 		state.factors.fleed_too_long = nil
 	end,
 	step = function(self, dtime)
-		animation_loop(self, dtime)
 		-- check timer ourselves
 		local state = self.entity_ai_state
 		if (minetest.get_us_time() - state.flee_start) > (15 * 1000000) then
 			state.factors.got_hit = nil
 			state.factors.fleed_too_long = true
 		end
-		consider_factors(self, dtime)
 
 		-- are we fleeing yet?
 		if self.path and self.path.distance then
@@ -417,7 +408,7 @@ drivers.flee = {
 				print("no path found!")
 				return
 			end
-
+--[[
 			minetest.add_particle({
 				pos = {x = pick.x, y = pick.y - 0.1, z = pick.z},
 				velocity = vector.new(),
@@ -429,6 +420,7 @@ drivers.flee = {
 				texture = "wool_red.png",
 				playername = nil
 			})
+--]]
 
 			self.path = Path(self, pick)
 			if not self.path:find() then
@@ -451,7 +443,6 @@ drivers.death = {
 		animation_select(self, "idle")
 	end,
 	step = function(self, dtime)
-		animation_loop(self, dtime)
 	end,
 	stop = function(self)
 		-- play out remaining animations
@@ -516,6 +507,15 @@ local function entity_ai_on_activate(self, staticdata)
 
 		local state = self.entity_ai_state
 
+		-- driver class, has to come before path
+		if state.driver_save then
+			driver = state.driver_save
+			state.driver_save = nil
+		else
+			driver = self.script.driver
+		end
+		self.driver = Driver(self, driver)
+
 		-- path class
 		if state.path_save then
 			self.path = Path(self, state.path_save.target)
@@ -524,17 +524,11 @@ local function entity_ai_on_activate(self, staticdata)
 			state.path_save = {}
 		end
 
-		-- driver class
-		if state.driver_save then
-			driver = state.driver_save
-			state.driver_save = nil
-		else
-			driver = self.script.driver
-		end
 		print("loaded: " .. self.name .. ", driver=" .. driver )
 	else
 		-- set initial mob driver
 		driver = self.script.driver
+		self.driver = Driver(self, driver)
 		print("activate: " .. self.name .. ", driver=" .. driver)
 	end
 
@@ -542,11 +536,12 @@ local function entity_ai_on_activate(self, staticdata)
 	self.object:setacceleration({x = 0, y = -9.81, z = 0})
 
 	-- init driver
-	self.driver = Driver(self, driver)
 	self.driver:start()
 end
 
 local function entity_ai_on_step(self, dtime)
+	animation_loop(self, dtime)
+	consider_factors(self, dtime)
 	self.driver:step(dtime)
 end
 
@@ -624,9 +619,9 @@ local sheep_script = {
 	},
 	-- sound samples
 	sounds = {
-		chatter = {name = "sheep_chatter", gain = 1.0},
-		footsteps = {name = "sheep_steps", gain = 1.0},
-		hurt = {name = "sheep_hurt", gain = 1.0},
+		chatter = {{name = "sheep_chatter", gain = 0.2}, {max_hear_distance = 12}},
+		footsteps = {{name = "sheep_steps", gain = 0.2}, {max_hear_distance = 12}},
+		hurt = {{name = "sheep_hurt", gain = 0.5}, {max_hear_distance = 18}},
 	},
 	-- mob script states:
 	roam = {
@@ -636,7 +631,7 @@ local sheep_script = {
 			attractor_nearby = "attracted",
 		},
 		sounds = {
-			random = "chatter",
+			random = "footsteps",
 		},
 	},
 	idle = {
@@ -679,7 +674,7 @@ local sheep_script = {
 			fleed_too_long = "roam",
 		},
 		sounds = {
-			random = "hurt",
+			random = "footsteps",
 		},
 	},
 	attracted = {
