@@ -579,6 +579,10 @@ end
 local sheep_script = {
 	-- the start driver. Should be able to spawn a mob with a different driver!
 	driver = "roam",
+	-- default properties
+	properties = {
+		speed = 2.0,
+	},
 	-- defined animation sets:
 	-- "name" = { animationspec1, animationspec2, animationspec3 }
 	-- each must be present -> 'nil' required
@@ -667,6 +671,9 @@ local sheep_script = {
 		},
 	},
 	flee = {
+		properties = {
+			speed = 4.0,
+		},
 		factors = {
 			got_hit = "startle",
 			fleed_too_long = "roam",

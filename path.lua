@@ -30,6 +30,7 @@ setmetatable(Path, {
 function Path.new(obj, to)
 	local self = setmetatable({}, Path)
 	self.object = obj.object
+	self.driver = obj.object:get_luaentity().driver
 	self.origin = self.object:getpos()
 	self.target = to
 	self.config = {
@@ -127,7 +128,7 @@ function Path:step(dtime)
 		local vdif = vec.y
 		vec.y = 0
 		local dir = vector.normalize(vec)
-		local spd = vector.multiply(dir, 2.0)-- vel
+		local spd = vector.multiply(dir, self.driver:get_property("speed"))
 		-- don't jump from too far away
 		if vdif > 0.1 and len < 1.5 then
 			-- jump
