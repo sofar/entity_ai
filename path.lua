@@ -88,7 +88,7 @@ function Path:step(dtime)
 	local curspd = self.object:getvelocity()
 	local pos = self.object:getpos()
 	-- if jumping, let jump finish before making more adjustments
-	if curspd.y <= 0.2 and curspd.y >= 0 then
+	if curspd.y >= 0 and curspd.y <= 2 then
 		local i, v = next(self.path, nil)
 		if not i then
 			return false
@@ -131,7 +131,7 @@ function Path:step(dtime)
 		-- don't jump from too far away
 		if vdif > 0.1 and len < 1.5 then
 			-- jump
-			spd = {x = spd.x/10, y = 5, z = spd.z/10}
+			spd = {x = spd.x/4, y = 5, z = spd.z/4}
 			self.object:setvelocity(spd)
 		elseif vdif < 0 and len <= 1.1 then
 			-- drop one path node just to be sure

@@ -82,19 +82,14 @@ local factors = {}
 -- Animation functions
 --
 
-local function animation_select(self, phase, segment)
+local function animation_select(self, animation, segment)
 	local state = self.entity_ai_state
-	state.phase = phase
-	local animname = self.script[state.driver].animations[phase]
-	if not animname then
-		print(self.name .. ": no animations for " .. phase .. "-" .. segment .. "(" .. animname ..")")
-		return
-	end
-	print("animation: " .. self.name .. ", phase = " .. phase .. ", anim = " .. animname .. ", " .. (segment or 0))
+	state.animation = animation
+	print("animation: " .. self.name .. ", animation = " .. animation .. ", segment = " .. (segment or 0))
 	if not segment then
-		local animations = self.script.animations[animname]
+		local animations = self.script.animations[animation]
 		if not animations then
-			print(self.name .. ": no animations for " .. phase .. "-" .. segment .. "(" .. animname ..")")
+			print(self.name .. ": no animations for " .. animation .. ", segment = " .. (segment or 0))
 			return
 		end
 		for i = 1, 3 do
@@ -113,14 +108,14 @@ local function animation_select(self, phase, segment)
 			end
 		end
 	else
-		local animdef = self.script.animations[animname][segment]
+		local animdef = self.script.animations[animation][segment]
 		if animdef then
 			state.segment = segment
 			self.object:set_animation(animdef[1], animdef.frame_speed, animdef.frame_loop)
 			return
 		end
 	end
-	print("animation_select: can't find animation " .. state.phase .. " for driver " .. state.driver .. " for entity " .. self.name)
+	print("animation_select: can't find animation " .. state.animation .. " for driver " .. state.driver .. " for entity " .. self.name)
 end
 
 local function animation_loop(self, dtime)
@@ -132,7 +127,7 @@ local function animation_loop(self, dtime)
 			state.animttl = nil
 			state.factors.anim_end = true
 			print("trigger anim_end")
-			animation_select(self, state.phase, state.segment + 1)
+			animation_select(self, state.animation, state.segment + 1)
 		end
 	end
 end
@@ -156,115 +151,119 @@ end
 
 drivers.roam = {
 	start = function(self)
-		-- start with moving animation
+		-- start with idle animation unless we get a path
 		animation_select(self, "idle")
 		local state = self.entity_ai_state
-		state.roam_idle = true
 		state.roam_ttl = math.random(3, 9)
+
+		-- get a target
+		local pos = self.object:getpos()
+		local minp, maxp = vector.sort({
+			x = math.random(pos.x - 10, pos.x + 10),
+			y = pos.y - 5,
+			z = math.random(pos.z - 10, pos.z + 10)
+			}, {
+			x = math.random(pos.x - 10, pos.x + 10),
+			y = pos.y + 5,
+			z = math.random(pos.z - 10, pos.z + 10)
+			})
+		minp, maxp = vector.sort(minp, maxp)
+		local nodes = minetest.find_nodes_in_area_under_air(minp, maxp,
+			{"group:flora", "group:snappy", "group:dirt", "group:soil", "group:crumbly", "default:dirt_with_dry_grass", "default:sand"})
+		if #nodes == 0 then
+			-- failed to get a target
+			print("No target found, stopped")
+			state.driver = "idle"
+			drivers.idle.start(self)
+			return
+		end
+
+		local pick = nodes[math.random(1, #nodes)]
+		-- find top walkable node
+		while true do
+			local node = minetest.get_node(pick)
+			if not minetest.registered_nodes[node.name].walkable then
+				pick.y = pick.y - 1
+			else
+				-- one up at the end
+				pick.y = pick.y + 1
+				break
+			end
+		end
+		-- move to the top surface of pick
+		if not pick then
+			print("no path found!")
+			state.driver = "idle"
+			drivers.idle.start(self)
+			return
+		end
+
+		minetest.add_particle({
+			pos = {x = pick.x, y = pick.y - 0.1, z = pick.z},
+			velocity = vector.new(),
+			acceleration = vector.new(),
+			expirationtime = 3,
+			size = 6,
+			collisiondetection = false,
+			vertical = false,
+			texture = "wool_red.png",
+			playername = nil
+		})
+
+		self.path = Path(self, pick)
+		if not self.path:find() then
+			print("Unable to calculate path")
+			state.driver = "idle"
+			drivers.idle.start(self)
+			return
+		end
+
+		-- done, roaming mode good!
+		animation_select(self, "move")
 	end,
 	step = function(self, dtime)
 		animation_loop(self, dtime)
 		consider_factors(self, dtime)
 		-- handle movement stuff
 		local state = self.entity_ai_state
-		if state.roam_ttl and state.roam_ttl > 0 then
+		if state.roam_ttl > 0 then
 			state.roam_ttl = state.roam_ttl - dtime
-			if state.roam_idle then
-				-- we should already be stopped
+			-- do path movement
+			if not self.path or
+					self.path:distance() < 0.7 or
+					not self.path:step(dtime) then
+				state.driver = "idle"
+				drivers.idle.start(self)
 				return
-			elseif state.roam_move then
-				-- do path movement
-				if not self.path then
-					state.roam_ttl = 0
-					return
-				end
-				if self.path:distance() < 1.0 then
-					state.roam_ttl = 0
-					return
-				end
-				if not self.path:step(dtime) then
-					-- pathing failed
-					state.roam_ttl = 0
-				end
-			else
-				print("unknown roam state!")
 			end
 		else
-			-- reset ttl
-			state.roam_ttl = math.random(3, 9)
-			-- flip state
-			if state.roam_idle then
-				-- get a target
-				local pos = self.object:getpos()
-				local minp, maxp = vector.sort({
-					x = math.random(pos.x - 10, pos.x + 10),
-					y = pos.y - 5,
-					z = math.random(pos.z - 10, pos.z + 10)
-					}, {
-					x = math.random(pos.x - 10, pos.x + 10),
-					y = pos.y + 5,
-					z = math.random(pos.z - 10, pos.z + 10)
-					})
-				minp, maxp = vector.sort(minp, maxp)
-				local nodes = minetest.find_nodes_in_area_under_air(minp, maxp,
-					{"group:flora", "group:snappy", "group:dirt", "group:soil", "group:crumbly", "default:dirt_with_dry_grass", "default:sand"})
-				if #nodes == 0 then
-					-- failed to get a target, just stand still
-					print("No target found, stopped")
-					return
-				end
-
-				local pick = nodes[math.random(1, #nodes)]
-				-- find top walkable node
-				while true do
-					local node = minetest.get_node(pick)
-					if not minetest.registered_nodes[node.name].walkable then
-						pick.y = pick.y - 1
-					else
-						-- one up at the end
-						pick.y = pick.y + 1
-						break
-					end
-				end
-				-- move to the top surface of pick
-				if not pick then
-					print("no path found!")
-					return
-				end
-
-				minetest.add_particle({
-					pos = {x = pick.x, y = pick.y - 0.1, z = pick.z},
-					velocity = vector.new(),
-					acceleration = vector.new(),
-					expirationtime = 3,
-					size = 6,
-					collisiondetection = false,
-					vertical = false,
-					texture = "wool_red.png",
-					playername = nil
-				})
-
-				self.path = Path(self, pick)
-				if not self.path:find() then
-					print("Unable to calculate path")
-					return
-				end
-
-				-- done, roaming mode good!
-				animation_select(self, "move")
-				state.roam_idle = nil
-				state.roam_move = true
-			else
-				animation_select(self, "idle")
-				state.roam_idle = true
-				state.roam_move = nil
-				-- stop
-				self.object:setvelocity(vector.new())
-			end
+			state.driver = "idle"
+			drivers.idle.start(self)
 		end
 	end,
 	stop = function(self)
 		-- play out remaining animations
+	end,
+}
+
+drivers.idle = {
+	start = function(self)
+		animation_select(self, "idle")
+		self.object:setvelocity(vector.new())
+		local state = self.entity_ai_state
+		state.idle_ttl = math.random(2, 20)
+	end,
+	step = function(self, dtime)
+		animation_loop(self, dtime)
+		consider_factors(self, dtime)
+		local state = self.entity_ai_state
+		state.idle_ttl = state.idle_ttl - dtime
+		if state.idle_ttl <= 0 then
+			state.driver = "roam"
+			drivers.roam.start(self)
+		end
+	end,
+	stop = function(self)
 	end,
 }
 
@@ -292,7 +291,6 @@ drivers.startle = {
 
 drivers.eat = {
 	start = function(self)
-		-- startle animation
 		animation_select(self, "eat")
 		self.object:setvelocity(vector.new())
 		-- collect info we want to use in this driver
@@ -347,7 +345,7 @@ drivers.flee = {
 		consider_factors(self, dtime)
 
 		-- are we fleeing yet?
-		if self.path.distance then
+		if self.path and self.path.distance then
 			-- stop fleeing if we're at a safe distance
 			-- execute flee path
 			if self.path:distance() < 2.0 then
@@ -431,8 +429,6 @@ drivers.flee = {
 
 			-- done, roaming mode good!
 			animation_select(self, "move")
-			state.roam_idle = nil
-			state.roam_move = true
 		end
 	end,
 	stop = function(self)
@@ -613,12 +609,16 @@ local sheep_script = {
 			got_hit = "startle",
 			became_fertile = "fertile",
 			attractor_nearby = "attracted",
+		},
+	},
+	idle = {
+		driver = "idle",
+		factors = {
+			got_hit = "startle",
+			became_fertile = "fertile",
+			attractor_nearby = "attracted",
 			too_far_from_home = "homing",
 			near_grass = "eat",
-		},
-		animations = {
-			move = "move",
-			idle = "idle",
 		},
 	},
 	eat = {
@@ -628,18 +628,11 @@ local sheep_script = {
 			became_fertile = "fertile",
 			attractor_nearby = "attracted",
 		},
-		animations = {
-			eat = "eat",
-			idle = "idle",
-		},
 	},
 	startle = {
 		driver = "startle",
 		factors = {
 			anim_end = "flee",
-		},
-		animations = {
-			idle = "startle",
 		},
 	},
 	flee = {
@@ -648,9 +641,6 @@ local sheep_script = {
 			got_hit = "startle",
 			fleed_too_long = "roam",
 		},
-		animations = {
-			move = "run",
-		},
 	},
 	attracted = {
 		driver = "approach",
@@ -658,19 +648,11 @@ local sheep_script = {
 			became_fertile = "fertile",
 			approached_too_long = "roam",
 		},
-		animations = {
-			move = "move",
-			idle = "idle",
-		},
 	},
 	fertile = {
 		driver = "mate",
 		factors = {
 			got_hit = "startle",
-		},
-		animations = {
-			move = "move",
-			idle = "idle",
 		},
 	},
 	homing = {
@@ -679,16 +661,9 @@ local sheep_script = {
 			near_home = "roam",
 			got_hit = "startle",
 		},
-		animations = {
-			move = "move",
-			idle = "idle",
-		},
 	},
 	death = {
 		driver = "death",
-		animations = {
-			idle = "death",
-		},
 	},
 }
 
@@ -700,7 +675,7 @@ minetest.register_entity("entity_ai:sheep", {
 	mesh = "sheep.b3d",
 	textures = {"sheep_fur.png"},
 	-- standard stuff
-	collisionbox = {-7/16, -1/2, -7/16, 7/16, 6/16, 7/16},
+	collisionbox = {-5/16, -1/2, -5/16, 5/16, 4/16, 5/16},
 	-- entity_ai stuff
 	script = sheep_script,
 	-- standard callbacks
