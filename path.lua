@@ -3,18 +3,6 @@
 -- Path class - manage and execute an entity path
 --
 
--- misc helper function
-local function dir_to_yaw(vec)
-	if vec.z < 0 then
-		return math.pi - math.atan(vec.x / vec.z)
-	elseif vec.z > 0 then
-		return -math.atan(vec.x / vec.z)
-	elseif vec.x < 0 then
-		return math.pi
-	else
-		return 0
-	end
-end
 
 -- Class definition
 Path = {}
@@ -62,7 +50,6 @@ function Path:find(finder)
 			-- use the finder
 			self.target = entity_ai.registered_finders[v](self.object:get_luaentity())
 			if self.target then
-				print("finder successful: " .. v)
 				break
 			end
 		end

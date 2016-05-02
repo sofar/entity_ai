@@ -68,6 +68,25 @@ obj:factor_is_near_mate = ...
 -- misc functions
 --
 
+-- misc helper functions
+
+function dir_to_yaw(vec)
+	if vec.z < 0 then
+		return math.pi - math.atan(vec.x / vec.z)
+	elseif vec.z > 0 then
+		return -math.atan(vec.x / vec.z)
+	elseif vec.x < 0 then
+		return math.pi
+	else
+		return 0
+	end
+end
+
+function yaw_to_dir(yaw)
+	local y = yaw + (math.pi / 2)
+	return {x = math.cos(y), y = 0, z = math.sin(y)}
+end
+
 function vector.sort(v1, v2)
 	return {x = math.min(v1.x, v2.x), y = math.min(v1.y, v2.y), z = math.min(v1.z, v2.z)},
 		{x = math.max(v1.x, v2.x), y = math.max(v1.y, v2.y), z = math.max(v1.z, v2.z)}
@@ -479,13 +498,28 @@ entity_ai.register_factor("near_foodnode", function(self, dtime)
 	self.near_foodnode_ttl = 2.0
 	local pos = vector.round(self.object:getpos())
 	local yaw = self.object:getyaw()
-	local minp = vector.subtract(pos, 1)
-	local maxp = vector.add(pos, 1)
+	self.yaw = yaw
+	local offset = yaw_to_dir(yaw)
+	local maxp = vector.add(pos, offset)
+	local minp = vector.subtract(maxp, {x = 0, y = 1, z = 0 })
 	local nodes = minetest.find_nodes_in_area(minp, maxp, self.driver:get_property("foodnodes"))
 
 	if #nodes == 0 then
 		return
 	end
+
+--[[	minetest.add_particle({
+		pos = maxp,
+		velocity = vector.new(),
+		acceleration = vector.new(),
+		expirationtime = 3,
+		size = 6,
+		collisiondetection = false,
+		vertical = false,
+		texture = "wool_pink.png",
+		playername = nil
+	})
+--]]
 
 	-- store grass node in our factor result
 	local state = self.entity_ai_state
