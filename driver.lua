@@ -18,7 +18,7 @@ setmetatable(Driver, {
 -- private functions
 local function driver_setup(self, driver)
 	self.name = driver
-	self.driver = drivers[driver]
+	self.driver = entity_ai.registered_drivers[driver]
 	self.properties = table.copy(self.object.script.properties)
 	local driver_script = self.object.script[driver]
 	if driver_script.properties then
@@ -41,6 +41,11 @@ local function driver_start(self)
 end
 
 
+local function driver_stop(self)
+	self.driver.stop(self.object)
+end
+
+
 --- constructor
 function Driver.new(object, driver)
 	local self = setmetatable({}, Driver)
@@ -52,6 +57,7 @@ end
 
 -- public functions
 function Driver:switch(driver)
+	driver_stop(self)
 	driver_setup(self, driver)
 	driver_start(self)
 end
@@ -73,7 +79,7 @@ function Driver:step(dtime)
 end
 
 function Driver:stop()
-	self.driver.stop(self.object)
+	driver_stop(self)
 end
 
 function Driver:get_property(property)

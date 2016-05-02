@@ -10,3 +10,5 @@ sheep_hurt.1.ogg:
 - http://www.freesound.org/people/confusion_music/sounds/103441/ confusion_music CC-BY-3.0
 sheep_steps.1.ogg:
 - http://www.freesound.org/people/newagesoup/sounds/342475/ newagesoup CC-BY-3.0
+on_punch.*.ogg:
+- http://www.freesound.org/people/Eelke/sounds/266648/ Eelke CC-BY-3.0

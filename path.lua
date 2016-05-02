@@ -27,12 +27,11 @@ setmetatable(Path, {
 })
 
 -- constructor
-function Path.new(obj, to)
+function Path.new(obj)
 	local self = setmetatable({}, Path)
 	self.object = obj.object
 	self.driver = obj.object:get_luaentity().driver
 	self.origin = self.object:getpos()
-	self.target = to
 	self.config = {
 		distance = 30,
 		jump = 1.0,
@@ -51,7 +50,29 @@ function Path:save()
 	}
 end
 
-function Path:find()
+function Path:find(finder)
+	-- select a finder
+	if not finder then
+		local finders = self.object:get_luaentity().script[self.driver.name].finders
+		if not finders then
+			print("No finder for driver: " .. self.driver.name)
+			return false
+		end
+		for _, v in ipairs(finders) do
+			-- use the finder
+			self.target = entity_ai.registered_finders[v](self.object:get_luaentity())
+			if self.target then
+				print("finder successful: " .. v)
+				break
+			end
+		end
+	else
+		self.target = entity_ai.registered_finders[finder](self.object:get_luaentity())
+	end
+	if not self.target then
+		return false
+	end
+
 	-- pathing will fail if we're on a ledge. We can fix this by
 	-- pathing from the node below instead
 	local pos = vector.round(self.origin)
@@ -154,6 +175,9 @@ end
 
 function Path:distance()
 	if not self.path then
+		return 0
+	end
+	if not self.target then
 		return 0
 	end
 

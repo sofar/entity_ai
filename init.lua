@@ -58,7 +58,7 @@ point in time. Factors can be "A node is nearby that can be grazed on", "close t
 
 -- returns: bool
 obj:factor_is_fertile = function(self) end
-obj:factor_is_near_grass = function(self) end
+obj:factor_is_near_foodnode = function(self) end
 obj:factor_was_hit = function(self) end
 obj:factor_is_near_mate = ...
 
@@ -77,8 +77,22 @@ end
 --
 -- globals
 --
-drivers = {}
-local factors = {}
+entity_ai = {}
+
+entity_ai.registered_drivers = {}
+function entity_ai.register_driver(name, def)
+	entity_ai.registered_drivers[name] = def
+end
+
+entity_ai.registered_factors = {}
+function entity_ai.register_factor(name, func)
+	entity_ai.registered_factors[name] = func
+end
+
+entity_ai.registered_finders = {}
+function entity_ai.register_finder(name, func)
+	entity_ai.registered_finders[name] = func
+end
 
 
 --
@@ -97,7 +111,7 @@ dofile(modpath .. "/driver.lua")
 local function animation_select(self, animation, segment)
 	local state = self.entity_ai_state
 	state.animation = animation
-	print(self.name .. ": driver = " .. self.driver.name .. ", animation = " .. animation .. ", segment = " .. (segment or 0))
+	--print(self.name .. ": driver = " .. self.driver.name .. ", animation = " .. animation .. ", segment = " .. (segment or 0))
 	if not segment then
 		local animations = self.script.animations[animation]
 		if not animations then
@@ -138,7 +152,6 @@ local function animation_loop(self, dtime)
 		if state.animttl <= 0 then
 			state.animttl = nil
 			state.factors.anim_end = true
-			print("trigger anim_end")
 			animation_select(self, state.animation, state.segment + 1)
 		end
 	end
@@ -149,8 +162,8 @@ local function consider_factors(self, dtime)
 
 	for factor, factordriver in pairs(self.script[self.driver.name].factors) do
 		-- do we have a test we need to run?
-		if factors[factor] then
-			factors[factor](self, dtime)
+		if entity_ai.registered_factors[factor] then
+			entity_ai.registered_factors[factor](self, dtime)
 		end
 		-- check results
 		if state.factors[factor] then
@@ -161,68 +174,64 @@ local function consider_factors(self, dtime)
 	end
 end
 
+entity_ai.register_finder("find_habitat", function(self)
+	local pos = self.object:getpos()
+	local minp, maxp = vector.sort({
+		x = math.random(pos.x - 10, pos.x + 10),
+		y = pos.y - 5,
+		z = math.random(pos.z - 10, pos.z + 10)
+		}, {
+		x = math.random(pos.x - 10, pos.x + 10),
+		y = pos.y + 5,
+		z = math.random(pos.z - 10, pos.z + 10)
+		})
+	minp, maxp = vector.sort(minp, maxp)
+	local nodes = minetest.find_nodes_in_area_under_air(minp, maxp, self.driver:get_property("habitatnodes"))
+	if #nodes == 0 then
+		return nil
+	end
 
-drivers.roam = {
+	local pick = nodes[math.random(1, #nodes)]
+	-- find top walkable node
+	while true do
+		local node = minetest.get_node(pick)
+		if not minetest.registered_nodes[node.name].walkable then
+			pick.y = pick.y - 1
+		else
+			-- one up at the end
+			pick.y = pick.y + 1
+			break
+		end
+	end
+	-- move to the top surface of pick
+	if not pick then
+		return nil
+	end
+
+--[[		minetest.add_particle({
+		pos = {x = pick.x, y = pick.y - 0.1, z = pick.z},
+		velocity = vector.new(),
+		acceleration = vector.new(),
+		expirationtime = 3,
+		size = 6,
+		collisiondetection = false,
+		vertical = false,
+		texture = "wool_red.png",
+		playername = nil
+	})
+--]]
+	return pick
+end)
+
+
+entity_ai.register_driver("roam", {
 	start = function(self)
 		-- start with idle animation unless we get a path
 		animation_select(self, "idle")
 		local state = self.entity_ai_state
 		state.roam_ttl = math.random(3, 9)
 
-		-- get a target
-		local pos = self.object:getpos()
-		local minp, maxp = vector.sort({
-			x = math.random(pos.x - 10, pos.x + 10),
-			y = pos.y - 5,
-			z = math.random(pos.z - 10, pos.z + 10)
-			}, {
-			x = math.random(pos.x - 10, pos.x + 10),
-			y = pos.y + 5,
-			z = math.random(pos.z - 10, pos.z + 10)
-			})
-		minp, maxp = vector.sort(minp, maxp)
-		local nodes = minetest.find_nodes_in_area_under_air(minp, maxp,
-			{"group:flora", "group:snappy", "group:dirt", "group:soil", "group:crumbly", "default:dirt_with_dry_grass", "default:sand"})
-		if #nodes == 0 then
-			-- failed to get a target
-			print("No target found, stopped")
-			self.driver:switch("idle")
-			return
-		end
-
-		local pick = nodes[math.random(1, #nodes)]
-		-- find top walkable node
-		while true do
-			local node = minetest.get_node(pick)
-			if not minetest.registered_nodes[node.name].walkable then
-				pick.y = pick.y - 1
-			else
-				-- one up at the end
-				pick.y = pick.y + 1
-				break
-			end
-		end
-		-- move to the top surface of pick
-		if not pick then
-			print("no path found!")
-			self.driver:switch("idle")
-			return
-		end
-
---[[		minetest.add_particle({
-			pos = {x = pick.x, y = pick.y - 0.1, z = pick.z},
-			velocity = vector.new(),
-			acceleration = vector.new(),
-			expirationtime = 3,
-			size = 6,
-			collisiondetection = false,
-			vertical = false,
-			texture = "wool_red.png",
-			playername = nil
-		})
---]]
-
-		self.path = Path(self, pick)
+		self.path = Path(self)
 		if not self.path:find() then
 			print("Unable to calculate path")
 			self.driver:switch("idle")
@@ -251,9 +260,9 @@ drivers.roam = {
 	stop = function(self)
 		-- play out remaining animations
 	end,
-}
+})
 
-drivers.idle = {
+entity_ai.register_driver("idle", {
 	start = function(self)
 		animation_select(self, "idle")
 		self.object:setvelocity(vector.new())
@@ -269,9 +278,9 @@ drivers.idle = {
 	end,
 	stop = function(self)
 	end,
-}
+})
 
-drivers.startle = {
+entity_ai.register_driver("startle", {
 	start = function(self)
 		-- startle animation
 		animation_select(self, "startle")
@@ -291,20 +300,19 @@ drivers.startle = {
 	stop = function(self)
 		-- play out remaining animations
 	end,
-}
+})
 
-drivers.eat = {
+entity_ai.register_driver("eat", {
 	start = function(self)
 		animation_select(self, "eat")
 		self.object:setvelocity(vector.new())
 		-- collect info we want to use in this driver
 		local state = self.entity_ai_state
 		-- clear factors
-		state.factors.near_grass = nil
+		state.factors.near_foodnode = nil
 		state.eat_ttl = math.random(30, 60)
 	end,
 	step = function(self, dtime)
-
 		local state = self.entity_ai_state
 		state.eat_ttl = (state.eat_ttl or math.random(30, 30)) - dtime
 		if state.eat_ttl > 0 then
@@ -326,10 +334,80 @@ drivers.eat = {
 		end
 	end,
 	stop = function(self)
+		local hp = self.object:get_hp()
+		if hp < self.driver:get_property("hp_max") then
+			self.object:set_hp(hp + 1)
+		end
 	end,
-}
+})
 
-drivers.flee = {
+entity_ai.register_finder("flee_attacker", function(self)
+	local state = self.entity_ai_state
+	local from = state.attacked_at
+	if state.attacker and state.attacker ~= "" then
+		local player = minetest.get_player_by_name(state.attacker)
+		if player then
+			from = player:getpos()
+		end
+	end
+	if not from then
+		from = self.object:getpos()
+		state.attacked_at = from
+	end
+
+	from = vector.round(from)
+
+	local pos = self.object:getpos()
+	local dir = vector.subtract(pos, from)
+	dir = vector.normalize(dir)
+	dir = vector.multiply(dir, 10)
+	local to = vector.add(pos, dir)
+
+	local nodes = minetest.find_nodes_in_area_under_air(
+			vector.subtract(to, 4),
+			vector.add(to, 4),
+			{"group:crumbly", "group:cracky", "group:stone"})
+
+	if #nodes == 0 then
+		-- failed to get a target, just run away from attacker?!
+		print("No target found, stopped")
+		return
+	end
+
+	-- find top walkable node
+	local pick = nodes[math.random(1, #nodes)]
+	while true do
+		local node = minetest.get_node(pick)
+		if not minetest.registered_nodes[node.name].walkable then
+			pick.y = pick.y - 1
+		else
+			-- one up at the end
+			pick.y = pick.y + 1
+			break
+		end
+	end
+
+	-- move to the top surface of pick
+	if not pick then
+		return false
+	end
+--[[
+	minetest.add_particle({
+		pos = {x = pick.x, y = pick.y - 0.1, z = pick.z},
+		velocity = vector.new(),
+		acceleration = vector.new(),
+		expirationtime = 3,
+		size = 6,
+		collisiondetection = false,
+		vertical = false,
+		texture = "wool_red.png",
+		playername = nil
+	})
+--]]
+	return pick
+end)
+
+entity_ai.register_driver("flee", {
 	start = function(self)
 		animation_select(self, "move")
 		local state = self.entity_ai_state
@@ -358,86 +436,22 @@ drivers.flee = {
 				end
 			end
 		else
-			-- get new target to flee to
-			local from = self.attacked_at
-			if self.attacker and self.attacker ~= "" then
-				local player = minetest.get_player_by_name(self.attacker)
-				if player then
-					from = player:getpos()
-				end
-			end
-			if not from then
-				from = self.object:getpos()
-				self.attacked_at = from
-			end
-
-			from = vector.round(from)
-
-			local pos = self.object:getpos()
-			local dir = vector.subtract(pos, from)
-			dir = vector.normalize(dir)
-			dir = vector.multiply(dir, 10)
-			local to = vector.add(pos, dir)
-
-			local nodes = minetest.find_nodes_in_area_under_air(
-					vector.subtract(to, 4),
-					vector.add(to, 4),
-					{"group:crumbly", "group:cracky", "group:stone"})
-
-			if #nodes == 0 then
-				-- failed to get a target, just run away from attacker?!
-				print("No target found, stopped")
-				return
-			end
-
-			-- find top walkable node
-			local pick = nodes[math.random(1, #nodes)]
-			while true do
-				local node = minetest.get_node(pick)
-				if not minetest.registered_nodes[node.name].walkable then
-					pick.y = pick.y - 1
-				else
-					-- one up at the end
-					pick.y = pick.y + 1
-					break
-				end
-			end
-
-			-- move to the top surface of pick
-			if not pick then
-				print("no path found!")
-				return
-			end
---[[
-			minetest.add_particle({
-				pos = {x = pick.x, y = pick.y - 0.1, z = pick.z},
-				velocity = vector.new(),
-				acceleration = vector.new(),
-				expirationtime = 3,
-				size = 6,
-				collisiondetection = false,
-				vertical = false,
-				texture = "wool_red.png",
-				playername = nil
-			})
---]]
-
-			self.path = Path(self, pick)
+			self.path = Path(self)
 			if not self.path:find() then
 				print("Unable to calculate path")
 				return
 			end
 
-			-- done, roaming mode good!
+			-- done, flee path good!
 			animation_select(self, "move")
 		end
 	end,
 	stop = function(self)
 		-- play out remaining animations
 	end,
-}
+})
 
-drivers.death = {
+entity_ai.register_driver("death", {
 	start = function(self)
 		-- start with moving animation
 		animation_select(self, "idle")
@@ -447,9 +461,9 @@ drivers.death = {
 	stop = function(self)
 		-- play out remaining animations
 	end,
-}
+})
 
-factors.near_grass = function(self, dtime)
+entity_ai.register_factor("near_foodnode", function(self, dtime)
 	local state = self.entity_ai_state
 	if state.factors.ate_enough and state.factors.ate_enough > 0 then
 		state.factors.ate_enough = state.factors.ate_enough - dtime
@@ -457,29 +471,17 @@ factors.near_grass = function(self, dtime)
 	else
 		state.factors.ate_enough = nil
 	end
-	if self.near_grass_ttl and self.near_grass_ttl > 0 then
-		self.near_grass_ttl = self.near_grass_ttl - dtime
+	if self.near_foodnode_ttl and self.near_foodnode_ttl > 0 then
+		self.near_foodnode_ttl = self.near_foodnode_ttl - dtime
 		return
 	end
 	-- don't check too often
-	self.near_grass_ttl = 2.0
+	self.near_foodnode_ttl = 2.0
 	local pos = vector.round(self.object:getpos())
 	local yaw = self.object:getyaw()
 	local minp = vector.subtract(pos, 1)
 	local maxp = vector.add(pos, 1)
-	local nodes = minetest.find_nodes_in_area(minp, maxp, {
-		"group:grass",
-		"default:grass_1",
-		"default:grass_2",
-		"default:grass_3",
-		"default:grass_4",
-		"default:grass_5",
-		"default:dry_grass_1",
-		"default:dry_grass_2",
-		"default:dry_grass_3",
-		"default:dry_grass_4",
-		"default:dry_grass_5",
-	})
+	local nodes = minetest.find_nodes_in_area(minp, maxp, self.driver:get_property("foodnodes"))
 
 	if #nodes == 0 then
 		return
@@ -488,8 +490,9 @@ factors.near_grass = function(self, dtime)
 	-- store grass node in our factor result
 	local state = self.entity_ai_state
 	local pick, _ = next(nodes, nil)
-	state.factors.near_grass = pick
-end
+	state.factors.near_foodnode = pick
+end)
+
 
 local function entity_ai_on_activate(self, staticdata)
 	self.entity_ai_state = {
@@ -524,13 +527,16 @@ local function entity_ai_on_activate(self, staticdata)
 			state.path_save = {}
 		end
 
-		print("loaded: " .. self.name .. ", driver=" .. driver )
+		--print("loaded: " .. self.name .. ", driver=" .. driver )
 	else
 		-- set initial mob driver
 		driver = self.script.driver
 		self.driver = Driver(self, driver)
-		print("activate: " .. self.name .. ", driver=" .. driver)
+		--print("activate: " .. self.name .. ", driver=" .. driver)
 	end
+
+	-- properties
+	self.object:set_hp(self.driver:get_property("hp_max"))
 
 	-- gravity
 	self.object:setacceleration({x = 0, y = -9.81, z = 0})
@@ -548,12 +554,13 @@ end
 local function entity_ai_on_punch(self, puncher, time_from_last_punch, tool_capabilities, dir)
 	local state = self.entity_ai_state
 	state.factors["got_hit"] = {puncher:get_player_name(), time_from_last_punch, tool_capabilities, dir, self.object:getpos()}
+	-- sounds?
+	minetest.sound_play("on_punch", {object = self.object})
+	-- hp dmg
 	if self.object:get_hp() == 0 then
 		--FIXME
 		print("death")
-		self.object:set_hp(1)
 		self.driver:switch("death")
-		return false
 	end
 end
 
@@ -561,7 +568,7 @@ local function entity_ai_on_rightclick(self, clicker)
 end
 
 local function entity_ai_get_staticdata(self)
-	print("saved: " .. self.name)
+	--print("saved: " .. self.name)
 	local state = self.entity_ai_state
 	state.driver_save = self.driver.name
 	if self.path and self.path.save then
@@ -577,6 +584,31 @@ local sheep_script = {
 	-- default properties
 	properties = {
 		speed = 2.0,
+		hp_max = 20,
+		foodnodes = {
+			"group:grass",
+			"default:grass_1",
+			"default:grass_2",
+			"default:grass_3",
+			"default:grass_4",
+			"default:grass_5",
+			"default:dry_grass_1",
+			"default:dry_grass_2",
+			"default:dry_grass_3",
+			"default:dry_grass_4",
+			"default:dry_grass_5",
+		},
+		habitatnodes = {
+			"group:flora",
+			"group:snappy",
+			"group:dirt",
+			"group:soil",
+			"group:crumbly",
+			"group:grass",
+			"default:dirt_with_grass",
+			"default:dirt_with_dry_grass",
+			"default:sand"
+		,}
 	},
 	-- defined animation sets:
 	-- "name" = { animationspec1, animationspec2, animationspec3 }
@@ -625,6 +657,9 @@ local sheep_script = {
 	},
 	-- mob script states:
 	roam = {
+		finders = {
+			"find_habitat",
+		},
 		factors = {
 			got_hit = "startle",
 			became_fertile = "fertile",
@@ -640,7 +675,7 @@ local sheep_script = {
 			became_fertile = "fertile",
 			attractor_nearby = "attracted",
 			too_far_from_home = "homing",
-			near_grass = "eat",
+			near_foodnode = "eat",
 		},
 		sounds = {
 			random = "chatter",
@@ -666,6 +701,9 @@ local sheep_script = {
 		},
 	},
 	flee = {
+		finders = {
+			"flee_attacker",
+		},
 		properties = {
 			speed = 4.0,
 		},
@@ -713,7 +751,6 @@ local sheep_script = {
 
 minetest.register_entity("entity_ai:sheep", {
 	name = "entity_ai:sheep",
-	hp_max = 30,
 	physical = true,
 	visual = "mesh",
 	mesh = "sheep.b3d",
