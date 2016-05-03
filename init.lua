@@ -327,8 +327,6 @@ entity_ai.register_driver("eat", {
 		self.object:setvelocity(vector.new())
 		-- collect info we want to use in this driver
 		local state = self.entity_ai_state
-		-- clear factors
-		state.factors.near_foodnode = nil
 		state.eat_ttl = math.random(30, 60)
 	end,
 	step = function(self, dtime)
@@ -353,10 +351,46 @@ entity_ai.register_driver("eat", {
 		end
 	end,
 	stop = function(self)
+		-- increase HP
 		local hp = self.object:get_hp()
 		if hp < self.driver:get_property("hp_max") then
 			self.object:set_hp(hp + 1)
 		end
+
+		-- eat foodnode
+		local state = self.entity_ai_state
+		local food = state.factors.near_foodnode
+		if not food then
+			return
+		end
+		-- FIXME can probably be removed.
+		if type(food) == "number" then
+			return
+		end
+		local node = minetest.get_node(food)
+		if node.name == "default:dirt_with_grass" or node.name == "default:dirt_with_dry_grass" then
+			minetest.set_node(food, {name = "default:dirt"})
+		elseif node.name == "default:grass_1" or node.name == "default:dry_grass_1" then
+			minetest.remove_node(food)
+		elseif node.name == "default:grass_2" then
+			minetest.set_node(food, {name = "default:grass_1"})
+		elseif node.name == "default:grass_3" then
+			minetest.set_node(food, {name = "default:grass_2"})
+		elseif node.name == "default:grass_4" then
+			minetest.set_node(food, {name = "default:grass_3"})
+		elseif node.name == "default:grass_5" then
+			minetest.set_node(food, {name = "default:grass_4"})
+		elseif node.name == "default:dry_grass_2" then
+			minetest.set_node(food, {name = "default:dry_grass_1"})
+		elseif node.name == "default:dry_grass_3" then
+			minetest.set_node(food, {name = "default:dry_grass_2"})
+		elseif node.name == "default:dry_grass_4" then
+			minetest.set_node(food, {name = "default:dry_grass_3"})
+		elseif node.name == "default:dry_grass_5" then
+			minetest.set_node(food, {name = "default:dry_grass_4"})
+		end
+
+		state.factors.near_foodnode = nil
 	end,
 })
 
@@ -522,9 +556,7 @@ entity_ai.register_factor("near_foodnode", function(self, dtime)
 --]]
 
 	-- store grass node in our factor result
-	local state = self.entity_ai_state
-	local pick, _ = next(nodes, nil)
-	state.factors.near_foodnode = pick
+	state.factors.near_foodnode = nodes[1]
 end)
 
 
@@ -789,6 +821,8 @@ minetest.register_entity("entity_ai:sheep", {
 	visual = "mesh",
 	mesh = "sheep.b3d",
 	textures = {"sheep_fur.png"},
+	makes_footstep_sound = true,
+	stepheight = 0.51,
 	-- standard stuff
 	collisionbox = {-5/16, -1/2, -5/16, 5/16, 4/16, 5/16},
 	-- entity_ai stuff
