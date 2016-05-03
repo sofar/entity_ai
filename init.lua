@@ -277,7 +277,8 @@ entity_ai.register_driver("roam", {
 		end
 	end,
 	stop = function(self)
-		-- play out remaining animations
+		local state = self.entity_ai_state
+		state.roam_ttl = nil
 	end,
 })
 
@@ -296,6 +297,8 @@ entity_ai.register_driver("idle", {
 		end
 	end,
 	stop = function(self)
+		local state = self.entity_ai_state
+		state.idle_ttl = nil
 	end,
 })
 
@@ -331,26 +334,16 @@ entity_ai.register_driver("eat", {
 	end,
 	step = function(self, dtime)
 		local state = self.entity_ai_state
-		state.eat_ttl = (state.eat_ttl or math.random(30, 30)) - dtime
 		if state.eat_ttl > 0 then
+			state.eat_ttl = state.eat_ttl - dtime
 			return
 		end
-		if math.random() > 0.25 then
-			state.factors.ate_enough = math.random(200, 00)
-			return
-		else
-			if state.eat_idle then
-				animation_select(self, "eat")
-				state.eat_ttl = math.random(30, 60)
-				state.eat_idle = nil
-			else
-				animation_select(self, "idle")
-				state.eat_ttl = math.random(10, 20)
-				state.eat_idle = true
-			end
-		end
+		state.factors.ate_enough = math.random(200, 00)
+		self.driver:switch("eat_end")
 	end,
 	stop = function(self)
+		local state = self.entity_ai_state
+		state.eat_ttl = nil
 		-- increase HP
 		local hp = self.object:get_hp()
 		if hp < self.driver:get_property("hp_max") then
@@ -358,7 +351,6 @@ entity_ai.register_driver("eat", {
 		end
 
 		-- eat foodnode
-		local state = self.entity_ai_state
 		local food = state.factors.near_foodnode
 		if not food then
 			return
@@ -392,6 +384,17 @@ entity_ai.register_driver("eat", {
 		end
 
 		state.factors.near_foodnode = nil
+	end,
+})
+
+entity_ai.register_driver("eat_end", {
+	start = function(self)
+		animation_select(self, "eat")
+		self.object:setvelocity(vector.new())
+	end,
+	step = function(self, dtime)
+	end,
+	stop = function(self)
 	end,
 })
 
@@ -647,200 +650,29 @@ local function entity_ai_get_staticdata(self)
 end
 
 
-local sheep_script = {
-	-- the start driver. Should be able to spawn a mob with a different driver!
-	driver = "roam",
-	-- default properties
-	properties = {
-		speed = 2.0,
-		hp_max = 20,
-		foodnodes = {
-			"group:grass",
-			"default:dirt_with_grass",
-			"default:dirt_with_dry_grass",
-			"default:grass_1",
-			"default:grass_2",
-			"default:grass_3",
-			"default:grass_4",
-			"default:grass_5",
-			"default:dry_grass_1",
-			"default:dry_grass_2",
-			"default:dry_grass_3",
-			"default:dry_grass_4",
-			"default:dry_grass_5",
-		},
-		habitatnodes = {
-			"group:flora",
-			"group:snappy",
-			"group:dirt",
-			"group:soil",
-			"group:crumbly",
-			"group:grass",
-			"default:dirt_with_grass",
-			"default:dirt_with_dry_grass",
-			"default:sand"
-		,}
-	},
-	-- defined animation sets:
-	-- "name" = { animationspec1, animationspec2, animationspec3 }
-	-- each must be present -> 'nil' required
-	-- [1] = head animation, should not loop (when entering this animation cycle)
-	-- [2] = body animation, should loop (base loop animation)
-	-- [3] = tail animation, should not loop (when leaving this animation cycle)
-	--FIXME handle repeats (running animation 5x ?)
-	animations = {
-		move = {
-			nil,
-			{{x = 0, y = 40}, frame_speed = 60, frame_loop = true},
-			nil
-		},
-		run = {
-			nil,
-			{{x = 0, y = 40}, frame_speed = 90, frame_loop = true},
-			nil
-		},
-		idle = {
-			nil,
-			{{x = 111, y = 129}, frame_speed = 10, frame_loop = true},
-			nil
-		},
-		eat = {
-			{{x = 41, y = 47}, frame_speed = 15, frame_loop = false},
-			{{x = 47, y = 75}, frame_speed = 15, frame_loop = true},
-			{{x = 75, y = 81}, frame_speed = 15, frame_loop = false},
-		},
-		startle = {
-			{{x = 100, y = 110}, frame_speed = 30, frame_loop = false},
-			{{x = 111, y = 119}, frame_speed = 30, frame_loop = true},
-			nil,
-		},
-		death = {
-			{{x = 82, y = 90}, frame_speed = 15, frame_loop = false},
-			{{x = 90, y = 99}, frame_speed = 15, frame_loop = true},
-			nil,
-		},
-	},
-	-- sound samples
-	sounds = {
-		chatter = {{name = "sheep_chatter", gain = 0.2}, {max_hear_distance = 12}},
-		footsteps = {{name = "sheep_steps", gain = 0.2}, {max_hear_distance = 12}},
-		hurt = {{name = "sheep_hurt", gain = 0.5}, {max_hear_distance = 18}},
-	},
-	-- mob script states:
-	roam = {
-		finders = {
-			"find_habitat",
-		},
-		factors = {
-			got_hit = "startle",
-			became_fertile = "fertile",
-			attractor_nearby = "attracted",
-		},
-		sounds = {
-			random = "footsteps",
-		},
-	},
-	idle = {
-		factors = {
-			got_hit = "startle",
-			became_fertile = "fertile",
-			attractor_nearby = "attracted",
-			too_far_from_home = "homing",
-			near_foodnode = "eat",
-		},
-		sounds = {
-			random = "chatter",
-		},
-	},
-	eat = {
-		factors = {
-			got_hit = "startle",
-			ate_enough = "roam",
-			became_fertile = "fertile",
-			attractor_nearby = "attracted",
-		},
-		sounds = {
-			random = "chatter",
-		},
-	},
-	startle = {
-		factors = {
-			anim_end = "flee",
-		},
-		sounds = {
-			start = "hurt",
-		},
-	},
-	flee = {
-		finders = {
-			"flee_attacker",
-		},
-		properties = {
-			speed = 4.0,
-		},
-		factors = {
-			got_hit = "startle",
-			fleed_too_long = "roam",
-		},
-		sounds = {
-			random = "footsteps",
-		},
-	},
-	attracted = {
-		factors = {
-			got_hit = "startle",
-			became_fertile = "fertile",
-			approached_too_long = "roam",
-		},
-		sounds = {
-			random = "chatter",
-		},
-	},
-	fertile = {
-		factors = {
-			got_hit = "startle",
-		},
-		sounds = {
-			random = "chatter",
-		},
-	},
-	homing = {
-		factors = {
-			near_home = "roam",
-			got_hit = "startle",
-		},
-		sounds = {
-			random = "chatter",
-		},
-	},
-	death = {
-		sounds = {
-			start = "hurt",
-		},
-	},
-}
+function entity_ai.register_entity(name, def)
+	-- FIXME add some sort of entity registration table
+	-- FIXME handle spawning and reloading?
+	def.physical = def.physical or true
+	def.visual = def.visual or "mesh"
+	def.makes_footstep_sound = def.makes_footstep_sound or true
+	def.stepheight = def.stepheight or 0.5
+	def.collisionbox = def.collisionbox or {-1/2, -1/2, -1/2, 1/2, 1/2, 1/2}
+	-- entity_ai callbacks
+	def.on_activate = entity_ai_on_activate
+	def.on_step = entity_ai_on_step
+	def.on_punch = entity_ai_on_punch
+	def.on_rightclick = entity_ai_on_rightclick
+	def.get_staticdata = entity_ai_get_staticdata
 
-minetest.register_entity("entity_ai:sheep", {
-	name = "entity_ai:sheep",
-	physical = true,
-	visual = "mesh",
-	mesh = "sheep.b3d",
-	textures = {"sheep_fur.png"},
-	makes_footstep_sound = true,
-	stepheight = 0.51,
-	-- standard stuff
-	collisionbox = {-5/16, -1/2, -5/16, 5/16, 4/16, 5/16},
-	-- entity_ai stuff
-	script = sheep_script,
-	-- standard callbacks
-	on_activate = entity_ai_on_activate,
-	on_step = entity_ai_on_step,
-	on_punch = entity_ai_on_punch, -- ?
-	on_rightclick = entity_ai_on_rightclick, -- per entity stuff I suppose
-	get_staticdata = entity_ai_get_staticdata,
-})
+	minetest.register_entity(name, def)
+end
+
+-- load entities
+dofile(modpath .. "/sheep.lua")
 
 
+-- misc.
 minetest.register_on_joinplayer(function(player)
 	minetest.add_entity({x=31.0,y=2.0,z=96.0}, "entity_ai:sheep")
 end)

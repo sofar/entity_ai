@@ -37,11 +37,13 @@ local function driver_start(self)
 				object = self.object.object}
 		minetest.sound_play(spec, params)
 	end
+	--print("Calling driver start for driver " .. self.name)
 	self.driver.start(self.object)
 end
 
 
 local function driver_stop(self)
+	--print("Calling driver stop for driver " .. self.name)
 	self.driver.stop(self.object)
 end
 
