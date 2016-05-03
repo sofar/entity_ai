@@ -252,7 +252,7 @@ entity_ai.register_driver("roam", {
 
 		self.path = Path(self)
 		if not self.path:find() then
-			print("Unable to calculate path")
+			--print("Unable to calculate path")
 			self.driver:switch("idle")
 			return
 		end
@@ -492,7 +492,7 @@ entity_ai.register_driver("flee", {
 		else
 			self.path = Path(self)
 			if not self.path:find() then
-				print("Unable to calculate path")
+				--print("Unable to calculate path")
 				return
 			end
 
@@ -587,11 +587,13 @@ local function entity_ai_on_activate(self, staticdata)
 		self.driver = Driver(self, driver)
 
 		-- path class
-		if state.path_save then
-			self.path = Path(self, state.path_save.target)
-			self.path:set_config(state.path_save.config)
-			self.path:find()
-			state.path_save = {}
+		if self.script[driver].finders then
+			if state.path_save then
+				self.path = Path(self, state.path_save.target)
+				self.path:set_config(state.path_save.config)
+				self.path:find()
+				state.path_save = {}
+			end
 		end
 
 		--print("loaded: " .. self.name .. ", driver=" .. driver )
