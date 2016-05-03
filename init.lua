@@ -368,10 +368,11 @@ entity_ai.register_driver("eat", {
 			return
 		end
 		local node = minetest.get_node(food)
+		minetest.sound_play(minetest.registered_nodes[node.name].sounds.dug, {pos = food, max_hear_distance = 18})
 		if node.name == "default:dirt_with_grass" or node.name == "default:dirt_with_dry_grass" then
 			minetest.set_node(food, {name = "default:dirt"})
-		elseif node.name == "default:grass_1" or node.name == "default:dry_grass_1" then
-			minetest.remove_node(food)
+		--elseif node.name == "default:grass_1" or node.name == "default:dry_grass_1" then
+		--	minetest.remove_node(food)
 		elseif node.name == "default:grass_2" then
 			minetest.set_node(food, {name = "default:grass_1"})
 		elseif node.name == "default:grass_3" then
@@ -653,6 +654,8 @@ local sheep_script = {
 		hp_max = 20,
 		foodnodes = {
 			"group:grass",
+			"default:dirt_with_grass",
+			"default:dirt_with_dry_grass",
 			"default:grass_1",
 			"default:grass_2",
 			"default:grass_3",
