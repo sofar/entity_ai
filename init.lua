@@ -656,7 +656,7 @@ function entity_ai.register_entity(name, def)
 	def.physical = def.physical or true
 	def.visual = def.visual or "mesh"
 	def.makes_footstep_sound = def.makes_footstep_sound or true
-	def.stepheight = def.stepheight or 0.5
+	def.stepheight = def.stepheight or 0.55
 	def.collisionbox = def.collisionbox or {-1/2, -1/2, -1/2, 1/2, 1/2, 1/2}
 	-- entity_ai callbacks
 	def.on_activate = entity_ai_on_activate
