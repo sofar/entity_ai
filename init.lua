@@ -92,6 +92,21 @@ function vector.sort(v1, v2)
 		{x = math.max(v1.x, v2.x), y = math.max(v1.y, v2.y), z = math.max(v1.z, v2.z)}
 end
 
+function check_trapped_and_escape(self)
+	local pos = vector.round(self.object:getpos())
+	local node = minetest.get_node(pos)
+	if minetest.registered_nodes[node.name].walkable then
+		-- stuck, can we go up?
+		local p2 = {x = pos.x, y = pos.y + 1, z = pos.z}
+		local n2 = minetest.get_node(p2)
+		if not minetest.registered_nodes[n2.name].walkable then
+			--print("mob trapped, escaped upward!")
+			self.object:setpos({x = pos.x, y = p2.y + 0.5, z = pos.z})
+		else
+			print("mob trapped but can't escape upward!", minetest.pos_to_string(pos))
+		end
+	end
+end
 
 --
 -- globals
@@ -288,6 +303,17 @@ entity_ai.register_driver("idle", {
 		self.object:setvelocity(vector.new())
 		local state = self.entity_ai_state
 		state.idle_ttl = math.random(2, 20)
+		-- sanity checks
+		check_trapped_and_escape(self)
+		local pos = vector.round(self.object:getpos())
+		local node = minetest.get_node(pos)
+		if minetest.registered_nodes[node.name].walkable then
+			-- stuck, can we go up?
+			local p2 = {x = pos.x, y = pos.y + 1, z = pos.z}
+			local n2 = minetest.get_node(pos)
+			if not minetest.registered_nodes[n2.name].walkable then
+			end
+		end
 	end,
 	step = function(self, dtime)
 		local state = self.entity_ai_state
