@@ -1,4 +1,10 @@
 
+--[[
+
+       THIS DOCUMENT IS OBSOLETE, AND ONLY A GUIDELINE
+
+--]]
+
 - entity programming should use object:method() design.
 - creating an entity should use simple methods as follows:
 
