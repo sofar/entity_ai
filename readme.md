@@ -18,7 +18,7 @@ The implications of this are:
 
 1) you can re-distribute the artwork, but only if you:
   a) properly attribute
-  b) do not modify the code
+  b) do not modify the artwork
 
 2) If you deploy the code on a server, you must provide the source code
    on request to any player on your server.
