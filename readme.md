@@ -8,6 +8,8 @@ Copyright (c) 2016 - Auke Kok <sofar@foo-projects.org>
 * except:
 - sound files in the `sounds` folder are licensed according to their
   respective licenses (documented in sounds/readme.md).
+- stone_giant.png is identical to default_stone.png from minetest_game
+  and licensed as the original.
 
 ["code" means everything in lua files, "artwork" means everything else,
 including documentation, sounds, textures, 3d models]
