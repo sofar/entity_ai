@@ -25,6 +25,7 @@ Any violations of these license clauses terminates your rights to use
 the software in this matter, and you may no longer operate this software
 on a server or redistribute it.
 
+
 ```
  Contributor License Agreement
 
@@ -34,7 +35,7 @@ on a server or redistribute it.
   parts of the contribution.
 
   (2) you expressly permit the author, Auke Kok, of entity_ai to
-  relicense all (your) contributions to LGPL-2.1 (for code) and
+  relicense all (your) contributions to LGPL-2.1+ (for code) and
   CC-BY-SA-4.0 (for all artwork) FOR THE SOLE PURPOSE OF MERGING THIS
   CODE INTO MINETEST_GAME[1] SHOULD THIS MERGE OCCUR AND BE ACCEPTED.
 
@@ -50,3 +51,21 @@ valuable changes to this project are required to give changes back
 until such a merge happens. If the merge occurs in the future, all
 contributions will become available under a permissive license to
 everyone, encouraging everyone to help with making this code mergable.
+
+
+* NOTICE FOR MONSTER ADDITIONS *
+
+The license for any monster using the exported API has to be compatible
+with the license of the API itself. That means that any custom monster
+code has to be AGPL-3.0 until it gets merged in minetest_game[1],
+after which it has to be LGPL-2.1+ or compatible with that. You may
+choose to license your artwork in any way you see fit, however.
+
+
+* SPLITTING UP THIS PROJECT *
+
+In the future, the core API code will be seperated from the monster
+definitions. Each monster will be it's own `mod` permitting users to
+disable/enable monsters as they see fit. This organization will help to
+keep per-mod specific code out of the core and make core functions
+better suited to handle all monsters.
