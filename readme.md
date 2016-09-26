@@ -5,6 +5,10 @@ Copyright (c) 2016 - Auke Kok <sofar@foo-projects.org>
 - All code is: GNU Affero General Public License, Version 3.0 (AGPL-3.0)
 - All artwork is: CC-BY-ND-4.0
 
+* except:
+- sound files in the `sounds` folder are licensed according to their
+  respective licenses (documented in sounds/readme.md).
+
 ["code" means everything in lua files, "artwork" means everything else,
 including documentation, sounds, textures, 3d models]
 

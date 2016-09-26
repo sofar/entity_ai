@@ -1,3 +1,15 @@
+--[[
+
+Copyright (c) 2016 - Auke Kok <sofar@foo-projects.org>
+
+* entity_ai is licensed as follows:
+- All code is: GNU Affero General Public License, Version 3.0 (AGPL-3.0)
+- All artwork is: CC-BY-ND-4.0
+
+A Contributor License Agreement exists, please read:
+- https://github.com/sofar/entity_ai/readme.md.
+
+--]]
 
 --
 -- Path class - manage and execute an entity path
