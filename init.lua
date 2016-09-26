@@ -697,9 +697,10 @@ end
 
 -- load entities
 dofile(modpath .. "/sheep.lua")
+dofile(modpath .. "/stone_giant.lua")
 
 
 -- misc.
 minetest.register_on_joinplayer(function(player)
-	minetest.add_entity({x=31.0,y=2.0,z=96.0}, "entity_ai:sheep")
+	minetest.add_entity({x=31.0,y=2.0,z=96.0}, "entity_ai:stone_giant")
 end)
