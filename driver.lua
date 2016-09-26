@@ -44,10 +44,15 @@ local function driver_start(self)
 	local script = self.object.script
 	local sounds = script[self.name].sounds
 	if sounds and sounds.start then
-		local spec = script.sounds[sounds.start][1]
-		local params = {max_hear_distance = script.sounds[sounds.start][2].max_hear_distance,
+		local sound = script.sounds[sounds.start]
+		if sound then
+			local params = {max_hear_distance = sound[2].max_hear_distance,
 				object = self.object.object}
-		minetest.sound_play(spec, params)
+			minetest.sound_play(sound[1], params)
+		else
+			minetest.log("error", "unknown sound '" .. sounds.start
+				.. "' from " .. self.name .. " driver")
+		end
 	end
 	--print("Calling driver start for driver " .. self.name)
 	self.driver.start(self.object)
@@ -84,10 +89,15 @@ function Driver:step(dtime)
 	local script = self.object.script
 	local sounds = script[self.name].sounds
 	if math.random(1, 200) == 1 and sounds and sounds.random then
-		local spec = script.sounds[sounds.random][1]
-		local params = {max_hear_distance = script.sounds[sounds.random][2].max_hear_distance,
-				object = self.object.object}
-		minetest.sound_play(spec, params)
+		local sound = script.sounds[sounds.random]
+		if sound then
+			local params = {max_hear_distance = sound[2].max_hear_distance,
+					object = self.object.object}
+			minetest.sound_play(sound[1], params)
+		else
+			minetest.log("error", "unknown sound '" .. sounds.random
+				.. "' from " .. self.name .. " driver")
+		end
 	end
 	self.driver.step(self.object, dtime)
 end
