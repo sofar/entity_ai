@@ -25,3 +25,22 @@ Additonal spawning algorithms (e.g. respawning, or randomly spawning
 more mobs after a while) should be optional and possibly done by
 an external mod.
 
+
+2 - Finish the Sheep
+
+Various "basic" things about sheep are not implemented. This includes
+gender and reproduction, shearing/wool, handling drops.
+
+
+3 - Finish the Stone Monster
+
+Missing fighting sequence, initial trapped state, drops etc..
+
+
+4 - Decide on additional monsters to be implemented
+
+Ideally, we add 1 swimmer and 1 flyer, just so that we cover all of the
+movement types and implement all the needed path finding codes to support
+them. I'm declaring a 5-monster maximum for now - the API is open enough
+that additional monsters can become modules.
+
