@@ -174,7 +174,6 @@ local sheep_script = {
 }
 
 entity_ai.register_entity("entity_ai:sheep", {
-	name = "entity_ai:sheep",
 	script = sheep_script,
 	mesh = "sheep.b3d",
 	textures = {"sheep_fur.png"},

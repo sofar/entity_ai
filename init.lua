@@ -679,6 +679,7 @@ end
 function entity_ai.register_entity(name, def)
 	-- FIXME add some sort of entity registration table
 	-- FIXME handle spawning and reloading?
+	def.name = name
 	def.physical = def.physical or true
 	def.visual = def.visual or "mesh"
 	def.makes_footstep_sound = def.makes_footstep_sound or true
