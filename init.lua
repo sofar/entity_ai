@@ -585,8 +585,8 @@ entity_ai.register_factor("near_foodnode", function(self, dtime)
 	})
 --]]
 
-	-- store grass node in our factor result
-	state.factors.near_foodnode = nodes[1]
+	-- store grass node in our factor result - take topmost in list
+	state.factors.near_foodnode = nodes[#nodes]
 end)
 
 
