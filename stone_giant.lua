@@ -17,7 +17,7 @@ A Contributor License Agreement exists, please read:
 --
 
 local stone_giant_script = {
-	-- the start driver. Should be able to spawn a mob with a different driver!
+	-- the start driver. Should be able to spawn a monster with a different driver!
 	driver = "roam",
 	-- default properties
 	properties = {
@@ -55,7 +55,7 @@ local stone_giant_script = {
 	-- sound samples
 	sounds = {
 	},
-	-- mob script states:
+	-- monster script states:
 	roam = {
 		finders = {
 			"find_habitat",

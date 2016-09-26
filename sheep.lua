@@ -17,7 +17,7 @@ A Contributor License Agreement exists, please read:
 --
 
 local sheep_script = {
-	-- the start driver. Should be able to spawn a mob with a different driver!
+	-- the start driver. Should be able to spawn a monster with a different driver!
 	driver = "roam",
 	-- default properties
 	properties = {
@@ -87,7 +87,7 @@ local sheep_script = {
 		footsteps = {{name = "sheep_steps", gain = 0.2}, {max_hear_distance = 12}},
 		hurt = {{name = "sheep_hurt", gain = 0.5}, {max_hear_distance = 18}},
 	},
-	-- mob script states:
+	-- monster script states:
 	roam = {
 		finders = {
 			"find_habitat",

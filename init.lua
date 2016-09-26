@@ -112,10 +112,10 @@ function check_trapped_and_escape(self)
 		local p2 = {x = pos.x, y = pos.y + 1, z = pos.z}
 		local n2 = minetest.get_node(p2)
 		if not minetest.registered_nodes[n2.name].walkable then
-			--print("mob trapped, escaped upward!")
+			--print("monster trapped, escaped upward!")
 			self.object:setpos({x = pos.x, y = p2.y + 0.5, z = pos.z})
 		else
-			print("mob trapped but can't escape upward!", minetest.pos_to_string(pos))
+			print("monster trapped but can't escape upward!", minetest.pos_to_string(pos))
 		end
 	end
 end
@@ -639,7 +639,7 @@ local function entity_ai_on_activate(self, staticdata)
 
 		--print("loaded: " .. self.name .. ", driver=" .. driver )
 	else
-		-- set initial mob driver
+		-- set initial monster driver
 		driver = self.script.driver
 		self.driver = Driver(self, driver)
 		--print("activate: " .. self.name .. ", driver=" .. driver)
