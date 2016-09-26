@@ -1,11 +1,11 @@
 
 Copyright (c) 2016 - Auke Kok <sofar@foo-projects.org>
 
-* entity_ai is licensed as follows:
+entity_ai is licensed as follows:
 - All code is: GNU Affero General Public License, Version 3.0 (AGPL-3.0)
 - All artwork is: CC-BY-ND-4.0
 
-* except:
+except:
 - sound files in the `sounds` folder are licensed according to their
   respective licenses (documented in sounds/readme.md).
 - stone_giant.png is identical to default_stone.png from minetest_game
