@@ -118,15 +118,14 @@ function Path:step(dtime)
 		if vector.distance(pos, v) < 0.3 then
 			-- remove one
 			--FIXME shouldn't return here
-			local j = i
-			local i, v = next(self.path, i)
-			if not v then
+			local _, v2 = next(self.path, i)
+			if not v2 then
 				return false
 			end
 		end
 		-- prune path more?
 		local ii, vv = next(self.path, i)
-		local iii, vvv = next(self.path, ii)
+		local _, vvv = next(self.path, ii)
 		if vv and vvv and vvv.y == v.y and vector.distance(vv,v) < 2 then
 			-- prune one
 			self.path[ii] = nil
@@ -164,7 +163,7 @@ function Path:step(dtime)
 		else
 			spd.y = self.object:getvelocity().y
 			-- don't change yaw when jumping
-			self.object:setyaw(dir_to_yaw(spd))
+			self.object:setyaw(minetest.dir_to_yaw(spd))
 			self.object:setvelocity(spd)
 		end
 	end

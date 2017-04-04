@@ -116,7 +116,6 @@ local sheep_script = {
 	eat = {
 		factors = {
 			got_hit = "startle",
-			ate_enough = "roam",
 			became_fertile = "fertile",
 			attractor_nearby = "attracted",
 		},
@@ -146,7 +145,6 @@ local sheep_script = {
 		},
 		factors = {
 			got_hit = "startle",
-			fleed_too_long = "roam",
 		},
 		sounds = {
 			random = "footsteps",
