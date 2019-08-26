@@ -1,14 +1,11 @@
 
 --[[
 
-Copyright (c) 2016 - Auke Kok <sofar@foo-projects.org>
+Copyright (c) 2016-2019 - Auke Kok <sofar@foo-projects.org>
 
 * entity_ai is licensed as follows:
-- All code is: GNU Affero General Public License, Version 3.0 (AGPL-3.0)
-- All artwork is: CC-BY-ND-4.0
-
-A Contributor License Agreement exists, please read:
-- https://github.com/sofar/entity_ai/readme.md.
+- All code is: LGPL-2.1
+- All artwork is: CC-BY-SA-4.0
 
 --]]
 
